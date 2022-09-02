@@ -168,7 +168,7 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
 
 **Round H**
 
-![image-20220818224836143](D:/Course/学习/笔记/笔记.assets/image-20220818224836143.png)
+![image-20220818224836143](Problem & Contest.assets/image-20220818224836143.png)
 
 ### kick start 2018
 
@@ -192,11 +192,11 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
 
 2. **Problem C**
 
-![image-20220806163944938](D:/Course/学习/笔记/笔记.assets/image-20220806163944938.png)
+![image-20220806163944938](Problem & Contest.assets/image-20220806163944938.png)
 
 **Round D**
 
-![image-20220809193251988](D:/Course/学习/笔记/笔记.assets/image-20220809193251988.png)
+![image-20220809193251988](Problem & Contest.assets/image-20220809193251988.png)
 
 此题的核心在于坐标的变化
 
@@ -262,17 +262,17 @@ N的范围为[1,100]
 
 
 
-![image-20220713122529963](D:/Course/学习/笔记/笔记.assets/image-20220713122529963.png)
+![image-20220713122529963](Problem & Contest.assets/image-20220713122529963.png)
 
-![image-20220713122617693](D:/Course/学习/笔记/笔记.assets/image-20220713122617693.png)
-
-
-
-![image-20220713122708088](D:/Course/学习/笔记/笔记.assets/image-20220713122708088.png)
+![image-20220713122617693](Problem & Contest.assets/image-20220713122617693.png)
 
 
 
-![image-20220713122801360](D:/Course/学习/笔记/笔记.assets/image-20220713122801360-16576865588091.png)
+![image-20220713122708088](Problem & Contest.assets/image-20220713122708088.png)
+
+
+
+![image-20220713122801360](Problem & Contest.assets/image-20220713122801360-16576865588091.png)
 
 ![image-20220824155547957](Problem & Contest.assets/image-20220824155547957.png)
 

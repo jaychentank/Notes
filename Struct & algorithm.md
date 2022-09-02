@@ -64,21 +64,21 @@ getline(cin,s);//会读入一行中的空格
 
 ### 前缀和、差分
 
-![image-20220713113403165](笔记.assets/image-20220713113403165.png)
+![image-20220713113403165](Struct & algorithm.assets/image-20220713113403165.png)
 
 差分的前缀和是原序列，当我们要在某个区间[l,r]的所有值上加上一个数x时，我们只需要在差分数组中进行一加一减即可：bl+x,br+1-x
 
-![image-20220713113450979](笔记.assets/image-20220713113450979.png)
+![image-20220713113450979](Struct & algorithm.assets/image-20220713113450979.png)
 
 快速求前缀和,sum是前缀和，s为原数组，b为差分数组
 
-![image-20220713113505733](笔记.assets/image-20220713113505733.png)
+![image-20220713113505733](Struct & algorithm.assets/image-20220713113505733.png)
 
 **二维差分**
 
 ![1](笔记.assets/1-16576833719338.png)
 
-![2](笔记.assets/2.png)
+![2](Struct & algorithm.assets/2.png)
 
 ## 几何
 
@@ -532,22 +532,30 @@ forn(i, n) {
 
 #### 树状数组
 
+![image-20220902090931350](Struct & algorithm.assets/image-20220902090931350.png)
+
+t[x]节点覆盖的长度等于lowbit(x)
+
 ```C++
-auto update = [&](int m, int x) {
-	++m;
-	while (m <= n) {
-		f[m] += x;
-		m += m & -m;
-	}
+//还可以维护和修改区间最大值
+auto lowbit=[&](int x){
+    return x&(-x);
 };
-auto query = [&](int m) {
-	++m;
-	int res = 0;
-	while (m > 0) {
-		res += f[m];
-		m -= m & -m;
-	}
-	return res;
+auto update=[&](int m, int x) {
+    ++m;
+    while (m <= n) {
+        f[m] += x;
+        m += lowbit(m);
+    }
+};
+auto query=[&](int m) {
+    ++m;
+    int res = 0;
+    while (m > 0) {
+        res += f[m];
+        m -= lowbit(m);
+    }
+    return res;
 };
 ```
 
@@ -855,7 +863,7 @@ dfs2
 2. **I - Coins**
 
 3. **J - Sushi**
-   ![image-20220817085846121](笔记.assets/image-20220817085846121.png)
+   ![image-20220817085846121](Struct & algorithm.assets/image-20220817085846121.png)
 
 4. **K-stones**
 
@@ -946,6 +954,40 @@ dfs2
    }
    cout << dp.back() << endl;
    ~~~
+   
+8. **Q-Flowers**
+
+   建立数组dp，dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在lognlogn的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
+
+   ~~~C++
+   //用树状数组修改和维护区间最大值
+   auto lowbit = [&](ll x) {
+       return x & (-x);
+   };
+   auto update = [&](ll m, ll x) {
+       while (m <= n) {
+           f[m] = max(f[m], x);
+           m += lowbit(m);
+       }
+   };
+   auto query = [&](ll m) {
+       ll res = 0;
+       while (m > 0) {
+           res = max(res, f[m]);
+           m -= lowbit(m);
+       }
+       return res;
+   };
+   
+   ll ans = 0;
+   forn(i, n) {
+       dp[i] = a[i] + query(h[i]);
+       ans = max(ans, dp[i]);
+       update(h[i], dp[i]);
+   }
+   ~~~
+
+   
 
 ## 图论
 
@@ -1048,7 +1090,7 @@ return ans;
 **增广路**：若P是图G中一条连通两个未匹配顶点的路径，并且属于M的边和不属于M的边(即已匹配和待匹配的边)在P上交替出现，则称P为相对于M的一条增广路径。
 通俗一点，增广路就是一个由A − B − A − B − . . . 的顺序选择一些边的过程。
 
-![image-20220807121111990](笔记.assets/image-20220807121111990.png)
+![image-20220807121111990](Struct & algorithm.assets/image-20220807121111990.png)
 
 **匈牙利算法**（**求二分图的最大匹配数和最小点覆盖数**。）
 
