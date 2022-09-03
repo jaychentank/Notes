@@ -23,13 +23,13 @@
 
 矩阵表示计算机，这个计算机有一些硬件资源，我会将它放在矩形的下面，硬件资源包括了CPU，内存，磁盘，网卡。所以硬件资源在最低一层。
 
-<img src="学习笔记.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MH_0vtckm44OL-Ry80u%2F-MHaaogxVYVNEYelA-Qc%2Fimage.png" alt="img" style="zoom: 33%;" />
+<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MH_0vtckm44OL-Ry80u%2F-MHaaogxVYVNEYelA-Qc%2Fimage.png" alt="img" style="zoom: 33%;" />
 
 #### 用户空间
 
 在这个架构的最上层，我们会运行各种各样的应用程序，或许有一个文本编辑器（VI），或许有一个C编译器（CC），你还可以运行作为CLI存在的Shell，所以这些就是正在运行的所有程序。这里程序都运行在同一个空间中，这个空间通常会被称为**用户空间（Userspace）**。
 
-<img src="学习笔记.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MH_0vtckm44OL-Ry80u%2F-MHaayKvfKkkAuA6ihD_%2Fimage.png" alt="img" style="zoom:33%;" />
+<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MH_0vtckm44OL-Ry80u%2F-MHaayKvfKkkAuA6ihD_%2Fimage.png" alt="img" style="zoom:33%;" />
 
 #### kernel
 
@@ -43,7 +43,7 @@
 
 在一个真实的完备的操作系统中，会有很多很多其他的服务，比如在不同进程之间通信的进程间通信服务，比如一大票与网络关联的软件（TCP/IP协议栈），比如支持声卡的软件，比如支持数百种不同磁盘，不同网卡的驱动。所以在一个完备的系统中，Kernel会包含大量的内容，数百万行代码。
 
-<img src="学习笔记.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MH_0vtckm44OL-Ry80u%2F-MHfa6qidpjQGh_XpuRm%2Fimage.png" alt="img" style="zoom:33%;" />
+<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MH_0vtckm44OL-Ry80u%2F-MHfa6qidpjQGh_XpuRm%2Fimage.png" alt="img" style="zoom:33%;" />
 
 #### API-kernel
 
@@ -93,3 +93,65 @@ pid=fork();
 
 我们的**操作系统是XV6，它运行在RISC-V微处理器上**，当然不只是RISC-V微处理器，我们假设有一定数量的其他硬件存在，例如内存，磁盘和一个console接口，这样我们才能跟操作系统进行交互。但是实际上，**XV6运行在QEMU模拟器之上。**这样能在没有特定硬件的前提下，运行XV6。
 
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MHl9exK8EbTldim_YCM%2F-MHvKyEGRPn_ArkwFtsl%2Fimage.png)
+
+这个程序里面执行了3个系统调用，分别时read，write和exit。
+
+read接收3个参数：
+
+1. 第一个参数是**文件描述符**，指向一个之前打开的文件。Shell会确保默认情况下，**当一个程序启动时，文件描述符0连接到console的输入，文件描述符1连接到了console的输出。**所以我可以通过这个程序看到console打印我的输入。当然，这里的程序会预期文件描述符已经被Shell打开并设置好。这里的0，1文件描述符是非常普遍的Unix风格，许多的Unix系统都会从文件描述符0读取数据，然后向文件描述符1写入数据。
+2. read的第二个参数是指向某段内存的指针，程序可以通过指针对应的地址读取内存中的数据，这里的指针就是代码中的buf参数。在代码第10行，程序在栈里面申请了64字节的内存，并将指针保存在buf中，这样read可以将数据保存在这64字节中。
+3. read的第三个参数是代码想读取的最大长度，sizeof(buf)表示，最多读取64字节的数据，所以这里的read最多只能从连接到文件描述符0的设备，也就是console中，读取64字节的数据。
+
+read的返回值可能是读到的字节数。read可能从一个文件读数据，如果到达了文件的结尾没有更多的内容了，read会返回0。**如果出现了一些错误，比如文件描述符不存在，read或许会返回-1。**
+
+这里的copy程序，或者说read，write系统调用，它们并不关心读写的数据格式，它们就是单纯的读写，而copy程序会按照8bit的字节流（**字节流就是一段连续的数据按照字节的长度读取**）处理数据，你怎么解析它们，完全是用应用程序决定的。
+
+**Q：如果read的第三个参数设置成1 + sizeof(buf)会怎样？**
+
+A：如果第三个参数是65字节，操作系统会拷贝65个字节到你提供的内存中（第二个参数）。但是如**果栈中的第65个字节有一些其他数据，那么这些数据会被覆盖，这里是个bug，或许会导致你的代码崩溃，或者一些异常的行为。**所以，作为一个程序员，你必须要小心。C语言很容易写出一些编译器能通过的，但是最后运行时出错的代码。虽然很糟糕，但是现实就是这样。
+
+### 1.6 open系统调用
+
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MHl9exK8EbTldim_YCM%2F-MI-cGHpBF8QimiAxJ63%2Fimage.png)
+
+这个叫做open的程序，会创建一个叫做output.txt的新文件，并向它写入一些数据，最后退出。我们看不到任何输出，因为它只是向打开的文件中写入数据。
+
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MI-duMOftVTKurQx8xP%2F-MI-dwBcsYyAPSxEF9GT%2Fimage.png)
+
+但是我们可以查看output.txt的内容
+
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MI-duMOftVTKurQx8xP%2F-MI-eih1REASgdLREXtV%2Fimage.png)
+
+所以，代码中的第11行，执行了open系统调用，将文件名output.txt作为参数传入，**第二个参数是一些标志位，用来告诉open系统调用在内核中的实现：我们将要创建并写入一个文件。open系统调用会返回一个新分配的文件描述符**，这里的文件描述符是一个小的数字，可能是2，3，4或者其他的数字。
+
+**文件描述符本质上对应了内核中的一个表单数据。内核维护了每个运行进程的状态，内核会为每一个运行进程保存一个表单，表单的key是文件描述符。这个表单让内核知道，每个文件描述符对应的实际内容是什么**。这里比较关键的点是，**每个进程都有自己独立的文件描述符空间，所以如果运行了两个不同的程序，对应两个不同的进程，如果它们都打开一个文件，它们或许可以得到相同数字的文件描述符，但是因为内核为每个进程都维护了一个独立的文件描述符空间，这里相同数字的文件描述符可能会对应到不同的文件。**
+
+### 1.7 Shell
+
+相对图形化用户接口来说，这里的**Shell通常也是人们说的命令行接口**。**Shell是一种对于Unix系统管理来说非常有用的接口， 它提供了很多工具来管理文件，编写程序，编写脚本。**通常来说，**当你输入内容时，你是在告诉Shell运行相应的程序。所以当我输入ls时，实际的意义是我要求Shell运行名为ls的程序，文件系统中会有一个文件名为ls，这个文件中包含了一些计算机指令，所以实际上，当我输入ls时，我是在要求Shell运行位于文件ls内的这些计算机指令。**
+
+除了运行程序以外，Shell还会做一些其他的事情，比如，它允许你能**重定向IO**。比如，我输入 ls > out。这里的实际意义是，我要求Shell运行ls命令，但是将输出重定向到一个叫做out的文件中。现在我们知道out文件包含了一些数据，我们可以通过cat指令读取一个文件，并显示文件的内容。
+
+~~~shell
+ls < out
+cat out
+grep x
+grep x < out
+~~~
+
+grep指令是将x作为参数传给grep。grep x会搜索输入中包含x的行，我可以告诉shell将输入重定向到文件out，这样我们就可以查看out中的x。
+
+**Q：编译器如何处理系统调用？生成的汇编语言是不是会调用一些由操作系统定义的代码段？**
+
+A：**有一个特殊的RISC-V指令，程序可以调用这个指令，并将控制权交给内核**。所以，实际上当你运行C语言并执行例如open或者write的系统调用时，**从技术上来说，open是一个C函数，但是这个函数内的指令实际上是机器指令，也就是说我们调用的open函数并不是一个C语言函数，它是由汇编语言实现，组成这个系统调用的汇编语言实际上在RISC-V中被称为ecall**。这个特殊的指令将控制权转给内核。之后内核检查进程的内存和寄存器，并确定相应的参数。
+
+### 1.8 fork系统调用
+
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MI1k8AMXiGfcMOdQA3M%2F-MIC8dUEtmCXiNb1vxAX%2Fimage.png)
+
+在第12行，我们调用了fork。fork会拷贝当前进程的内存，并创建一个新的进程，这里的内存包含了进程的指令和数据。之后，我们就有了两个拥有完全一样内存的进程。fork系统调用在两个进程中都会返回，在原始的进程中，fork系统调用会返回大于0的整数，这个是新创建进程的ID。而在新创建的进程中，fork系统调用会返回0。所以即使两个进程的内存是完全一样的，我们还是可以通过fork的返回值区分旧进程和新进程。
+
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MI1k8AMXiGfcMOdQA3M%2F-MICxMC2tQRxavGOy6o-%2Fimage.png)
+
+输出看起来像是垃圾数据。这里实际发生的是，**fork系统调用之后，两个进程都在同时运行**，QEMU实际上是在模拟多核处理器，所以这两个进程实际上就是同时在运行。所以当这两个进程在输出的时候，它们会同时一个字节一个字节的输出，两个进程的输出交织在一起，所以你可以看到两个f，两个o等等。在第一行最后，你可以看到0，这是子进程的输出。我猜父进程返回了19，作为子进程的进程ID。通常来说，这意味着这是操作系统启动之后的第19个进程。之后一个进程输出了child，一个进程输出了parent，这两个输出交织在一起。虽然这只是对于fork的一个简单应用，但是我们可以清晰的从输出看到这里创建了两个运行的进程，其中一个进程打印了child，另一个打印了parent。所以，fork（在子父进程中）返回不同的值是比较重要的。

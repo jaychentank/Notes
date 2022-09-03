@@ -56,9 +56,38 @@ cin>>s;//不会读入一行中的空格
 getline(cin,s);//会读入一行中的空格
 ~~~
 
+~~~C++
+for (int s = j; s; s = (s - 1) & j)//状压遍历子集
+~~~
 
+# 知识树
 
-# Algorithm
+## 排序
+
+### 希尔排序
+
+希尔排序是通过分组+插入排序
+
+![image-20220902232931147](Struct & algorithm.assets/image-20220902232931147.png)
+
+~~~C++
+void shell_sort(vi& arr,int n){
+    for(int step = n/2; step > 0;step /= 2)/*增量步长*/
+    {
+        /*step = 4 2 1*/
+        fort(i, step, n){
+            int tmp = arr[i];
+            int j = i - step;
+            for(;j >= 0 && tmp < arr[j];){
+                arr[j + step] = arr[j];
+                j -= step;
+            }
+            arr[j + step] = tmp;
+
+        }
+    }
+}
+~~~
 
 ## 杂
 
@@ -79,6 +108,112 @@ getline(cin,s);//会读入一行中的空格
 ![1](笔记.assets/1-16576833719338.png)
 
 ![2](Struct & algorithm.assets/2.png)
+
+### 扫描线
+
+主要解决：
+
+1. 矩阵面积问题
+2. 矩阵周长问题
+3. 多边形面积问题
+
+![image-20220902234613881](Struct & algorithm.assets/image-20220902234613881.png)
+
+**解决方案：**
+
+1. 通过区间离散化解决区间特别大的问题。
+2. 通过线段树维护区间信息。用cover表示区间\[l,r\]被覆盖的次数，用len表示区间的合法长度，用query(1,n)的合法长度，就能返回总共的区间长度了。
+
+建树
+
+~~~C++
+vi cover(maxn);//存放i节点对应覆盖情况的值
+vector<double> length(maxn);//存放区间i下的总长度
+vector<double> yy(maxn);//存放离散后的y值，下标用lowerbound进行查找
+~~~
+
+![image-20220903092835746](Struct & algorithm.assets/image-20220903092835746.png)
+
+这棵线段树的叶子节点的l,r不相等，差别为1。这是因为点对于求面积的题目毫无意义，我们最需要的是它每一个基础块。
+
+1. 第一条为入边，区间为[1,3]，则区间cover[1,3] +1(此时区间[1,3] = 1)
+
+2. query整个域的区间，得到len=10，则width[0]*10 = 50
+
+   ![image-20220903093141083](Struct & algorithm.assets/image-20220903093141083.png)
+
+3. 第二条边为入边，区间为[2,4]，则cover[2,4]+1
+
+4. query整个区间，得到len = 15.5，则width[1]*(25.5-10) = 77.5
+
+   (注意：这里只需要上推len，不需要下推cover至[2,3]和[3,4]，也不需要上推cover至[1,4]。这就是线段树的强大之处：**只要找到对应结点的区间能完全覆盖当前线段区间就可以回溯统计了，并不需要更新到叶子节点，这是线段树为什么效率高的原因**)
+
+   ![image-20220903093608071](Struct & algorithm.assets/image-20220903093608071.png)
+
+5. 第三条边为出边，区间从[1,3]，则[1,3]-1
+
+6. query整个区间，得到10.5，则width[2]*10.5 = 52.5
+
+   ![image-20220903093643623](Struct & algorithm.assets/image-20220903093643623.png)
+
+7. 第四条边为出边，区间从[15,25.5]，此时-1，整个区间没掉 8. query整个区间，值为0，遍历结束。
+
+~~~C++
+const int maxn = 2e4 + 5;
+vi cover(maxn);//存放i节点对应覆盖情况的值
+vector<double> length(maxn);//存放区间i下的总长度
+vector<double> yy;//存放离散后的y值，下标用lowerbound进行查找
+struct ScanLine {
+    double x;//边的x坐标
+    double upy, downy;//边的y坐标上，y坐标下
+    int inout;//入边为1，出边为-1
+    ScanLine() {}
+    ScanLine(double x, double y1, double y2, int io) :x(x), upy(y1), downy(y2), inout(io) {}
+};
+bool cmp(ScanLine& a, ScanLine& b) {
+    return a.x < b.x;
+}
+void pushup(int v, int l, int r) {
+    if (cover[v]) length[v] = yy[r] - yy[l];//某个点cover为正时这个点的长度
+    else if (l + 1 == r) length[v] = 0;//到了叶子节点
+    else length[v] = length[v << 1] + length[v << 1 | 1];
+}
+void update(int v, int l, int r, int L, int R, int io) {
+    if (L > r || R < l) return;
+    if (L <= l && R >= r) {
+        cover[v] += io;
+        pushup(v, l, r);
+        return;
+    }
+    if (l + 1 == r) return;
+    int mid = (l + r) >> 1;
+    if (L <= mid) update(v << 1, l, mid, L, R, io);
+    if (R > mid) update(v << 1 | 1, mid, r, L, R, io);
+    pushup(v, l, r);
+}
+void solve() {
+    int n; cin >> n;
+    vector<ScanLine> line;
+    forn(i, n) {
+        double x1, y1, x2, y2; cin >> x1 >> y1 >> x2 >> y2;
+        line.push_back(ScanLine(x1, y2, y1, 1));
+        line.push_back(ScanLine(x2, y2, y1, -1));
+        yy.push_back(y1);
+        yy.push_back(y2);
+    }
+    sort(all(yy)); sort(all(line), cmp);
+    yy.erase(unique(all(yy)), yy.end());
+    int len = yy.size(), cnt = line.size();
+    double ans = 0;
+    forn(i, cnt) {
+        if (i) ans += length[1] * (line[i].x - line[i - 1].x);
+        int yl = lower_bound(all(yy), line[i].downy) - yy.begin(), yr = lower_bound(all(yy), line[i].upy) - yy.begin();
+        int io = line[i].inout;
+        update(1, 0, len - 1, yl, yr, io);
+    }
+    cout << ans << endl;
+}
+~~~
 
 ## 几何
 
@@ -133,6 +268,10 @@ int gcd(int x, int y) //注意：x，y 需大于0
 
 n*k=lcm(n,k)*gcd(n,k) //lcm是最小公倍数，gcd是最大公约数
 ~~~
+
+平方和公式：1^2+2^2+3^2+...+n^2=n\*(n+1)\*(n+2)/6
+
+立方和公式：1^3+2^3+3^3+...+n^3=n^2  * (n+1)^2 / 4
 
 #### 计数质数
 
@@ -222,7 +361,7 @@ ll pw(ll a, ll b) {
 
 ll inv(ll x) { return pw(x, MOD - 2); }
 
-int init = []() {
+int init = [&]() {
 	F[0] = 1;
 	for (int i = 1; i <= MX; i++) F[i] = F[i - 1] * i % MOD;
 	I[MX] = inv(F[MX]);
@@ -563,8 +702,6 @@ auto query=[&](int m) {
 
 #### 线段树
 
-![image-20220713165523635](笔记.assets/image-20220713165523635.png)
-
 ##### 静态线段树
 
 ```C++
@@ -588,7 +725,7 @@ void update(int v, int l, int r, int x, int V) {
 	t[v] = t[v << 1] + t[v << 1 | 1];
 }
 int query(int v, int l, int r, int L, int R) {
-	if (l >= L and r <= R) return t[v];
+	if (l >= L && r <= R) return t[v];
     if (r<L || l>R) return 0;
 	int mid = (l + r) >> 1;
 	if (R <= mid) return query(v << 1, l, mid, L, R);
@@ -596,6 +733,59 @@ int query(int v, int l, int r, int L, int R) {
 	return query(v << 1, l, mid, L, R) + query(v << 1 | 1, mid + 1, r, L, R);
 }
 ```
+
+##### 动态开点的线段树
+
+通常来说，线段树占用空间是总区间长 n 的常数倍，空间复杂度是 O(n) 。然而，有时候 n 很巨大，而我们又不需要使用所有的节点，这时便可以**动态开点**——不再一次性建好树，而是一边修改、查询一边建立。我们不再用`p*2`和`p*2+1`代表左右儿子，而是用`ls`和`rs`记录左右儿子的编号。设总查询次数为 m ，则这样的总空间复杂度为 O(mlog⁡n) 。
+
+比起普通线段树，动态开点线段树有一个优势：**它能够处理零或负数位置。此时，求mid时不能用(l+r)/2，而要用(l+r-1)/2**
+
+~~~C++
+#define ls(x) tree[x].ls
+#define rs(x) tree[x].rs
+#define val(x) tree[x].val
+#define mark(x) tree[x].mark
+const int MAXV = 8e6;
+struct node
+{
+    ll val, mark;
+    int ls, rs;
+} tree[MAXV];
+void push_down(int p, int len)
+{
+    if (len <= 1) return;
+    if (!ls(p)) ls(p) = ++cnt;
+    if (!rs(p)) rs(p) = ++cnt;
+    val(ls(p)) += mark(p) * (len / 2);
+    mark(ls(p)) += mark(p);
+    val(rs(p)) += mark(p) * (len - len / 2);
+    mark(rs(p)) += mark(p);
+    mark(p) = 0;
+}
+ll query(int v, int l, int r, int L, int R)
+{
+    if (l >= L && r <= R) return val(v);
+    push_down(v, r - l + 1);
+    ll mid = (l + r - 1) / 2, ans = 0;
+    if (mid >= l) ans += query(ls(p), l, mid, L ,R);
+    if (mid < r) ans += query(rs(p), mid + 1, r, L, R);
+    return ans;
+}
+void update(int v, int l, int r, int L, int R，int d)
+{
+    if (l >= L && r <= R){
+    	val(p) += d * (r - l + 1);
+        mark(p) += d
+    }
+    push_down(v, r - c + 1);
+    int mid = (l + c - 1) / 2;
+    if (mid >= l) update(ls(v), l, mid, L, R, d);
+    if (mid < r) update(rs(v), mid + 1, r, L, R, d);
+    val(p) = val(ls(p)) + val(rs(p));
+}
+~~~
+
+可以看到，除了在`push_down`中进行了新节点的创建，其他基本和普通线段树一致。动态开点线段树不需要`build`，通常用在没有提供初始数据的场合（例如初始全0），这时更能显示出优势。当然，除了动态开点，其实先离散化再建树也常常能达到效果。但动态开点写起来更简单直观，而且在强制在线时只能这样做。
 
 ##### 区间更新的优化
 
@@ -748,11 +938,7 @@ public:
 
 ### RMQ(区间最值问题)
 
-我们设二维数组dp\[i][j]表示从第i位开始连续 ![2^j](笔记.assets/gif.gif) 个数中的最大(小)值。
-
-我们求dp\[i]\[j]的时候可以把它分成两部分。第一部分是从 ![i](笔记.assets/gif-16586520471093.gif) 到 ![i+2^{j-1}-1](笔记.assets/gif-16586520471094.gif) ，第二部分从![i+2^{j-1}](笔记.assets/gif-16586520471105.gif)到![i+2^j-1](笔记.assets/gif-16586520471106.gif) ，从而转移方程为：
-
-dp\[i][j]=min(dp\[i][j-1],dp\[i+(1<<j-1)][j-1])      （-号优先级大于<<）
+我们设二维数组dp\[i][j]表示从第i位开始连续 2^j 个数中的最大(小)值。
 
 ~~~C++
 void rmq_init()
@@ -765,11 +951,7 @@ void rmq_init()
 }
 ~~~
 
-**RMQ的查询部分**，假设我们需要查询区间[l ，r]中的最小值，令k = ![log_2(r-l+1)](笔记.assets/gif-165865357904015.gif) ， 则区间[l, r]的最小值dp[l,r] = min(dp\[l][k], dp\[r - (1 << k) + 1][k]);
-
-其中dp\[l][k]维护的是区间 [l, l + 2^k - 1] , dp\[r - (1 << k) + 1][k]维护的是区间 [r - 2^k + 1, r] 。
-
-那么只要我们保证![r-2^k+1](笔记.assets/gif-165865363761018.gif) ≤ ![l+2^k-1](笔记.assets/gif-165865363761019.gif)就能保证dp[l,r] = min(dp\[l][k], dp\[r - (1 << k) + 1][k])；
+**RMQ的查询部分**
 
 ~~~C++
 int rmq(int l, int r)
