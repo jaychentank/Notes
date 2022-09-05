@@ -40,6 +40,8 @@ public:
 3. partial_sum函数的头文件在\<numeric>，对(first, last)内的元素逐个求累计和，放在result容器内
 4. back_inserter函数头文件\<iterator>，用于在末尾插入元素。
 
+**652.寻找重复的子树**
+
 **761.特殊的二进制序列**
 
 由于题目定义特殊的二进制序列为，0和1数量相等且每一个前缀码中 1 的数量要大于等于 0 的数量，因此可以将1映射为(，0映射为)
@@ -237,6 +239,167 @@ N的范围为[1,100]
 **E - Red and Blue Graph**
 
 ![image-20220825202212204](Problem & Contest.assets/image-20220825202212204.png)
+
+### Atcoder经典dp题
+
+1. **E - Knapsack 2**
+
+2. **I - Coins**
+
+3. **J - Sushi**
+   ![image-20220817085846121](Problem & Contest.assets/image-20220817085846121.png)
+
+4. **K-stones**
+
+   设置dp[i]: 取i颗石子的胜负情况，dp[i] 为真则先手胜，否则后手胜。
+
+   重点是找到破题点：剩余的石子中可以被一次刚好拿完的记下来，由此看一看剩 k个石子时能不能赢。
+
+   ~~~C++
+   fort(i, 1, k + 1) {
+   	forn(j, n) {
+   		if (i >= a[j] && g[i - a[j]] == 0) {
+   			g[i] = 1; break;
+   		}
+   	}
+   }
+   cout << (g[k] ? "First" : "Second") << endl;
+   ~~~
+
+5. **L-Deque**
+
+   ~~~C++
+   forn(i, n) {
+   	cin >> a[i];
+   	dp[i][i] = a[i];
+   }
+   //dp[i][j]表示区间为(i,j)时，两个玩家玩得最优化时，X-Y的结果值
+   fort(l, 1, n) {
+   	for (int i = 0, j = l; j < n; i++, j++) {
+   		dp[i][j] = max(a[i] - dp[i + 1][j], a[j] - dp[i][j - 1]);
+   	}
+   }
+   cout << dp[0][n - 1] << endl;
+   ~~~
+
+6. **M-Candies**
+
+   ~~~C++
+   //TLE做法
+   f[0] = 1;//f[i]是i个蛋糕分配得方案数
+   forn(i, n) {
+       int a; cin >> a;
+   	for (int j = m; j >= 0; j--)
+   	{
+   		fort (k, 1, a)
+   		{
+   			if (j >= k)f[j] += f[j - k];
+   		}
+   	}
+   }
+   cout << f[m] << endl;
+   ~~~
+
+   ~~~C++
+   //优化做法 通过数组s来记录前缀和
+   vll f(k + 1), sum(k + 1); f[0] = 1;
+   forn(i, n) {
+   	int a; cin >> a;
+   	sum[0] = f[0];
+   	fort(j, 1, k + 1) sum[j] = (sum[j - 1] + f[j]) % MOD;
+   	forn(j, k + 1) {
+   		f[j] = sum[j];
+   		if (j > a) f[j] = (f[j] + MOD - sum[j - a - 1]) % MOD;
+   	}
+   }
+   cout << f[k] << endl;
+   ~~~
+
+7. **O-matching(状压dp)**
+
+   ~~~C++
+   vl dp(1 << n);
+   forn(i, n){
+       forn(j, n) cin >> a[i][j];
+   }
+   dp[0] = 1;
+   forn(i, n)
+   {
+       forn(j, 1 << n)//dp[j]为前i个男人匹配了j个女人的方案数
+       {
+           if (__builtin_popcount(j) != i)
+               continue;
+           forn(xx, n)
+           {
+               if (a[i][xx] && !((j >> xx) & 1))
+                   dp[j + (1 << xx)] = (dp[j + (1 << xx)] + dp[j]) % mod;
+           }
+       }
+   }
+   cout << dp.back() << endl;
+   ~~~
+
+8. **Q-Flowers**
+
+   建立数组dp，dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在lognlogn的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
+
+   ~~~C++
+   //用树状数组修改和维护区间最大值
+   auto lowbit = [&](ll x) {
+       return x & (-x);
+   };
+   auto update = [&](ll m, ll x) {
+       while (m <= n) {
+           f[m] = max(f[m], x);
+           m += lowbit(m);
+       }
+   };
+   auto query = [&](ll m) {
+       ll res = 0;
+       while (m > 0) {
+           res = max(res, f[m]);
+           m -= lowbit(m);
+       }
+       return res;
+   };
+   
+   ll ans = 0;
+   forn(i, n) {
+       dp[i] = a[i] + query(h[i]);
+       ans = max(ans, dp[i]);
+       update(h[i], dp[i]);
+   }
+   ~~~
+
+9. **R - Walk**
+
+   DP+矩阵快速幂
+
+   ![image-20220903220647461](Problem & Contest.assets/image-20220903220647461.png)
+
+   我们设a\[i][j]为从i走到j，走了k次的方案数，上图为k=0初始时的情况，此时只把从自己走到自己设为1作为初始状态。**那么怎样求k=1时的状态矩阵呢？只需要乘一次邻接矩阵即可**
+
+10. **T-Permutation**(插入dp)
+
+   ![image-20220905230040499](Problem & Contest.assets/image-20220905230040499.png)
+
+   ~~~C++
+   vvl f(n + 1, vl(n + 1)), sum(n + 1, vl(n + 1));
+   //f[i][j]表示前i个数字为1-i的全排列并且第i个数字是j且满足大小关系的方案数
+   //sum[i][j]表示第i个位置放1-j的方案数之和，即dp数组的前缀和
+   f[1][1] = 1;
+   fort(i, 1, n + 1) sum[1][i] = 1;
+   fort(i, 1, n) {
+       fort(j, 1, i + 2) {
+           if (s[i - 1] == '<')f[i + 1][j] = (f[i + 1][j] + sum[i][j - 1]) % mod;
+           else f[i + 1][j] = (f[i + 1][j] + sum[i][i + 1] - sum[i][j - 1] + mod) % mod;
+       }
+       fort(j, 1, n + 1) sum[i + 1][j] = (sum[i + 1][j - 1] + f[i + 1][j]) % mod;
+   }
+   
+   ll res = 0;
+   fort(i, 1, n + 1) res = (res + f[n][i]) % mod;
+   ~~~
 
 ### 总结
 

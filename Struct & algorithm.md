@@ -105,7 +105,7 @@ void shell_sort(vi& arr,int n){
 
 **二维差分**
 
-![1](笔记.assets/1-16576833719338.png)
+![1](Struct & algorithm.assets/1-16576833719338.png)
 
 ![2](Struct & algorithm.assets/2.png)
 
@@ -244,6 +244,53 @@ bool gimp_transform_polygon_is_convex(double x1, double y1, double x2, double y2
 ### 多边形包含
 
 利用叉积判断多边形包含
+
+### 凸包（Graham扫描算法）
+
+![image-20220904102731072](Struct & algorithm.assets/image-20220904102731072.png)
+
+凸包的性质：
+
+1. 它包围了点集中所有的点
+2. 它是凸多边形
+
+~~~C++
+//计算两个向量叉积
+//第一个向量起点a1，终点b1
+//第二个向量起点a2，终点b2
+double cross(Point a1, Point b1, Point a2, Point b2)
+{
+    double x1=b1.x-a1.x;
+    double x2=b2.x-a2.x;
+    double y1=b1.y-a1.y;
+    double y2=b2.y-a2.y;
+    return x1*y2-x2*y1;
+}
+vector<Point> convex_hull(vector<Point> p, int n)    //求点集p的凸包，函数返回值为这个凸包的点集
+{
+    sort(p.begin(), p.end(), cmp_x);   //按所定的规则给点排序
+    int k=0;         //凸包中点的个数
+    vector<Point> q(2*n);
+    //求下侧链
+    for (int i=0; i<n; i++)    //n个点遍历加入凸包并判断凸性
+    {
+        while (k>1 && cross(q[k-1], q[k-2], p[i], q[k-1])<=0)
+            k--;         //如果叉积小于等于0，凸包中最新的点出栈
+        q[k++]=p[i];
+    }
+ 
+    //求上侧链
+    for (i=n-2, t=k; i>=0; i--)
+    {
+        while (k>t && cross(q[k-1], q[k-2], p[i], q[k-1])<=0)
+            k--;
+        q[k++]=p[i];
+    }
+ 
+    q.resize(k-1);  //重设凸包大小
+    return q;
+}
+~~~
 
 ## 数学
 
@@ -386,26 +433,29 @@ ll A(int n, int r){
 #### 矩阵快速幂
 
 ~~~C++
-vvl multiply(vvll &a, vvl &b)
-{
-   	vvl c(2, vl(2));
-    forn(i, 2)
-    {
-        forn(j, 2)
-            c[i][j] = a[i][0] * b[0][j] + a[i][1] * b[1][j];
+struct Matrix {
+    int n, m;
+    vvl a;
+    Matrix operator *(const Matrix& x)const {
+        Matrix res(this->n, x.m);
+        forn(i, res.n) {
+            forn(j, res.m) {
+                forn(k, res.m) res.a[i][j] = (res.a[i][j] + this->a[i][k] * (x.a[k][j])) % mod;
+            }
+        }
+        return res;
     }
-    return c;
-}
-
-vvl matrixPow(vvl a, int n)
-{
-    vvl ret = {{1, 0}, {0, 1}};
-    while (n > 0)
-    {
-        if ((n & 1) == 1)
-            ret = multiply(ret, a);
-        n >>= 1;
-        a = multiply(a, a);
+    Matrix(int _n = 0, int _m = 0) {
+        n = _n; m = _n;
+        a = vvl(n, vl(m));
+    }
+};
+Matrix Pow(Matrix x, ll n) {
+    Matrix ret(x.n, x.n);
+    forn(i, ret.n) ret.a[i][i] = 1;
+    while (n) {
+        if (n & 1) ret = ret * x;
+        n >>= 1; x = x * x;
     }
     return ret;
 }
@@ -643,7 +693,7 @@ private:
 
 ### 单调栈
 
-单调栈的本质是及时弹出对后续无用数据
+单调栈的本质是及时弹出对后续无用数据，多用于求区间的最大（小）值
 
 ~~~C++
 vector<int> a(n), left(n, -1), right(n, n);
@@ -660,6 +710,70 @@ forn(i, n) {
 ~~~
 
 ### 树
+
+#### 树的基础
+
+##### 树的直径
+
+任意一个点的最远点一定是直径的一个端点
+
+##### 时间戳+lca
+
+~~~C++
+void init(int& n) {
+    dep = vector<int>(n + 1); in = vector<int>(n + 1); out = vector<int>(n + 1);
+    g = vector<vector<int>>(n + 1); fa = vector<vector<int>>(n + 1, vector<int>(30, -1));
+    t = 0;
+}
+
+bool cmp(int a, int b) {
+    return dep[a] > dep[b];
+}
+void dfs(int u, int p) {
+    in[u] = ++t;
+    dep[u] = dep[p] + 1;
+    for (int v : g[u]) {
+        if (v != p) {
+            fa[v][0] = u;
+            int up = 0, pre = u;
+            while (fa[pre][up] >= 0) {
+                fa[v][up + 1] = fa[pre][up];
+                pre = fa[pre][up++];
+            }
+            dfs(v, u);
+        }
+    }
+    out[u] = t;
+}
+bool isp(int u, int v) {
+    return in[u] <= in[v] && out[v] <= out[u];
+}
+bool is_link(vector<int>p) {
+    sort(p.begin(), p.end(), cmp); reverse(p.begin(), p.end());
+    for (int i = 1; i < p.size(); i++) {
+        if (!isp(p[i - 1], p[i])) return false;
+    }
+    return true;
+}
+int lca(int a, int b) {
+    if (dep[a] < dep[b]) swap(a, b);
+    int lim = log2(dep[a]) + 1;
+    for (int i = lim; i >= 0; --i) {
+        if (fa[a][i] != -1 && dep[fa[a][i]] >= dep[b]) a = fa[a][i];
+    }
+    if (a == b) return a;
+    for (int i = lim; i >= 0; --i) {
+        //如果fa[a][i]==fa[b][i],说明他们的公共祖先深度可能更深，因此不用更新，向更深的方向查找
+        //如果fa[a][i]!=fa[b][i]，说明目前他们的公共祖先比当前的祖先深度更浅，但是要深于上一个i，因此刷新a和b，向更小的范围查找祖先
+        if (fa[a][i] != fa[b][i]) {
+            a = fa[a][i];
+            b = fa[b][i];
+        }
+    }//最后发现祖先
+    if (fa[a][0] == fa[b][0]) return fa[a][0];
+    else return -1;
+
+~~~
 
 #### 基环树
 
@@ -841,64 +955,6 @@ int query(int v, int l, int r, int L, int R) {
 数组区间修改，单点查询：差分
 数组区间修改，区间查询：线段树
 
-#### 时间戳+lca
-
-~~~C++
-void init(int& n) {
-    dep = vector<int>(n + 1); in = vector<int>(n + 1); out = vector<int>(n + 1);
-    g = vector<vector<int>>(n + 1); fa = vector<vector<int>>(n + 1, vector<int>(30, -1));
-    t = 0;
-}
-
-bool cmp(int a, int b) {
-    return dep[a] > dep[b];
-}
-void dfs(int u, int p) {
-    in[u] = ++t;
-    dep[u] = dep[p] + 1;
-    for (int v : g[u]) {
-        if (v != p) {
-            fa[v][0] = u;
-            int up = 0, pre = u;
-            while (fa[pre][up] >= 0) {
-                fa[v][up + 1] = fa[pre][up];
-                pre = fa[pre][up++];
-            }
-            dfs(v, u);
-        }
-    }
-    out[u] = t;
-}
-bool isp(int u, int v) {
-    return in[u] <= in[v] && out[v] <= out[u];
-}
-bool is_link(vector<int>p) {
-    sort(p.begin(), p.end(), cmp); reverse(p.begin(), p.end());
-    for (int i = 1; i < p.size(); i++) {
-        if (!isp(p[i - 1], p[i])) return false;
-    }
-    return true;
-}
-int lca(int a, int b) {
-    if (dep[a] < dep[b]) swap(a, b);
-    int lim = log2(dep[a]) + 1;
-    for (int i = lim; i >= 0; --i) {
-        if (fa[a][i] != -1 && dep[fa[a][i]] >= dep[b]) a = fa[a][i];
-    }
-    if (a == b) return a;
-    for (int i = lim; i >= 0; --i) {
-        //如果fa[a][i]==fa[b][i],说明他们的公共祖先深度可能更深，因此不用更新，向更深的方向查找
-        //如果fa[a][i]!=fa[b][i]，说明目前他们的公共祖先比当前的祖先深度更浅，但是要深于上一个i，因此刷新a和b，向更小的范围查找祖先
-        if (fa[a][i] != fa[b][i]) {
-            a = fa[a][i];
-            b = fa[b][i];
-        }
-    }//最后发现祖先
-    if (fa[a][0] == fa[b][0]) return fa[a][0];
-    else return -1;
-}
-~~~
-
 ### 并查集
 
 ~~~C++
@@ -1037,139 +1093,6 @@ void dfs2(int u, int f)
 dfs(0,-1);
 dfs2
 ~~~
-
-### Atcoder经典dp题
-
-1. **E - Knapsack 2**
-
-2. **I - Coins**
-
-3. **J - Sushi**
-   ![image-20220817085846121](Struct & algorithm.assets/image-20220817085846121.png)
-
-4. **K-stones**
-
-   设置dp[i]: 取i颗石子的胜负情况，dp[i] 为真则先手胜，否则后手胜。
-
-   重点是找到破题点：剩余的石子中可以被一次刚好拿完的记下来，由此看一看剩 k个石子时能不能赢。
-
-   ~~~C++
-   fort(i, 1, k + 1) {
-   	forn(j, n) {
-   		if (i >= a[j] && g[i - a[j]] == 0) {
-   			g[i] = 1; break;
-   		}
-   	}
-   }
-   cout << (g[k] ? "First" : "Second") << endl;
-   ~~~
-
-5. **L-Deque**
-
-   ~~~C++
-   forn(i, n) {
-   	cin >> a[i];
-   	dp[i][i] = a[i];
-   }
-   //dp[i][j]表示区间为(i,j)时，两个玩家玩得最优化时，X-Y的结果值
-   fort(l, 1, n) {
-   	for (int i = 0, j = l; j < n; i++, j++) {
-   		dp[i][j] = max(a[i] - dp[i + 1][j], a[j] - dp[i][j - 1]);
-   	}
-   }
-   cout << dp[0][n - 1] << endl;
-   ~~~
-
-6. **M-Candies**
-
-   ~~~C++
-   //TLE做法
-   f[0] = 1;//f[i]是i个蛋糕分配得方案数
-   forn(i, n) {
-       int a; cin >> a;
-   	for (int j = m; j >= 0; j--)
-   	{
-   		fort (k, 1, a)
-   		{
-   			if (j >= k)f[j] += f[j - k];
-   		}
-   	}
-   }
-   cout << f[m] << endl;
-   ~~~
-
-   ~~~C++
-   //优化做法 通过数组s来记录前缀和
-   vll f(k + 1), sum(k + 1); f[0] = 1;
-   forn(i, n) {
-   	int a; cin >> a;
-   	sum[0] = f[0];
-   	fort(j, 1, k + 1) sum[j] = (sum[j - 1] + f[j]) % MOD;
-   	forn(j, k + 1) {
-   		f[j] = sum[j];
-   		if (j > a) f[j] = (f[j] + MOD - sum[j - a - 1]) % MOD;
-   	}
-   }
-   cout << f[k] << endl;
-   ~~~
-
-7. **O-matching(状压dp)**
-
-   ~~~C++
-   vl dp(1 << n);
-   forn(i, n){
-       forn(j, n) cin >> a[i][j];
-   }
-   dp[0] = 1;
-   forn(i, n)
-   {
-       forn(j, 1 << n)//dp[j]为前i个男人匹配了j个女人的方案数
-       {
-           if (__builtin_popcount(j) != i)
-               continue;
-           forn(xx, n)
-           {
-               if (a[i][xx] && !((j >> xx) & 1))
-                   dp[j + (1 << xx)] = (dp[j + (1 << xx)] + dp[j]) % mod;
-           }
-       }
-   }
-   cout << dp.back() << endl;
-   ~~~
-   
-8. **Q-Flowers**
-
-   建立数组dp，dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在lognlogn的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
-
-   ~~~C++
-   //用树状数组修改和维护区间最大值
-   auto lowbit = [&](ll x) {
-       return x & (-x);
-   };
-   auto update = [&](ll m, ll x) {
-       while (m <= n) {
-           f[m] = max(f[m], x);
-           m += lowbit(m);
-       }
-   };
-   auto query = [&](ll m) {
-       ll res = 0;
-       while (m > 0) {
-           res = max(res, f[m]);
-           m -= lowbit(m);
-       }
-       return res;
-   };
-   
-   ll ans = 0;
-   forn(i, n) {
-       dp[i] = a[i] + query(h[i]);
-       ans = max(ans, dp[i]);
-       update(h[i], dp[i]);
-   }
-   ~~~
-
-   
 
 ## 图论
 
