@@ -42,6 +42,41 @@ public:
 
 **652.寻找重复的子树**
 
+~~~C++
+class Solution {
+public:
+    vector<TreeNode*> findDuplicateSubtrees(TreeNode* root) {
+        dfs(root);
+        return {repeat.begin(), repeat.end()};
+    }
+
+    int dfs(TreeNode* node) {
+        if (!node) {
+            return 0;
+        }
+        auto tri = tuple{node->val, dfs(node->left), dfs(node->right)};
+        if (auto it = seen.find(tri); it != seen.end()) {
+            repeat.insert(it->second.first);
+            return it->second.second;
+        }
+        else {
+            seen[tri] = {node, ++idx};
+            return idx;
+        }
+    }
+
+private:
+    static constexpr auto tri_hash = [fn = hash<int>()](const tuple<int, int, int>& o) -> size_t {
+        auto&& [x, y, z] = o;
+        return (fn(x) << 24) ^ (fn(y) << 8) ^ fn(z);
+    };
+
+    unordered_map<tuple<int, int, int>, pair<TreeNode*, int>, decltype(tri_hash)> seen{0, tri_hash};
+    unordered_set<TreeNode*> repeat;
+    int idx = 0;
+};
+~~~
+
 **761.特殊的二进制序列**
 
 由于题目定义特殊的二进制序列为，0和1数量相等且每一个前缀码中 1 的数量要大于等于 0 的数量，因此可以将1映射为(，0映射为)
@@ -400,6 +435,66 @@ N的范围为[1,100]
    ll res = 0;
    fort(i, 1, n + 1) res = (res + f[n][i]) % mod;
    ~~~
+
+11. **U - Grouping**(状压dp)
+
+    ~~~c++
+    fort(k, 1, 1 << n) {
+        forn(i, n) {
+            fort(j, i + 1, n) {
+                if ((k >> i & 1) && (k >> j & 1)) {
+                    dp[k] += a[i][j];
+                }
+            }
+        }
+        for (int j = k & (k - 1); j; j = (j - 1) & k) {
+            dp[k] = max(dp[k], dp[k ^ j] + dp[j]);
+        }
+    }
+    ~~~
+
+12. **V - Subtree**
+
+    ![image-20220906193909696](Problem & Contest.assets/image-20220906193909696.png)
+
+    ~~~C++
+    function<void(int, int)> dfs1 = [&](int u, int p) {
+        f[u] = 1;
+        for (int& v : G[u]) {
+            if (v != p) {
+                dfs1(v, u);
+                f[u] = ((ll)f[u] * (f[v] + 1)) % m;
+            }
+        }
+        pre[u] = vi(G[u].size(), 1);
+        suf[u] = vi(G[u].size(), 1);
+        fort(i, 1, G[u].size()) {
+            pre[u][i] = pre[u][i - 1];
+            if (G[u][i - 1] ^ p) {
+                pre[u][i] = ((ll)pre[u][i] * (f[G[u][i - 1]] + 1)) % m;
+            }
+        }
+        rfort(i, G[u].size() - 2, 0) {
+            suf[u][i] = suf[u][i + 1];
+            if (G[u][i + 1] ^ p) {
+                suf[u][i] = ((ll)suf[u][i] * (f[G[u][i + 1]] + 1)) % m;
+            }
+        }
+    };
+    function<void(int, int)> dfs2 = [&](int u, int p) {
+        forn(i, G[u].size()) {
+            int v = G[u][i];
+            if (v != p) {
+                g[v] = ((((ll)pre[u][i] * suf[u][i]) % m) * g[u]) % m + 1;
+                dfs2(v, u);
+            }
+        }
+    };
+    dfs1(0, 0);
+    g[0] = 1;
+    dfs2(0, 0);
+    forn(i, n) cout << ((ll)g[i] * f[i]) % m << endl;
+    ~~~
 
 ### 总结
 

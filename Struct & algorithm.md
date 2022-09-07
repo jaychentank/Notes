@@ -105,8 +105,6 @@ void shell_sort(vi& arr,int n){
 
 **二维差分**
 
-![1](Struct & algorithm.assets/1-16576833719338.png)
-
 ![2](Struct & algorithm.assets/2.png)
 
 ### 扫描线
@@ -297,22 +295,6 @@ vector<Point> convex_hull(vector<Point> p, int n)    //求点集p的凸包，函
 ### 数论
 
 ~~~C++
-int gcd(int x, int y)
-{
-	return y?gcd(y,x%y):x;
-}
-int gcd(int x, int y) //注意：x，y 需大于0 
-{
-	int t;
-	while(y)
-	{
-		t=x%y;
-		x=y;
-		y=t;
-	}
-	return x;
-}
-
 n*k=lcm(n,k)*gcd(n,k) //lcm是最小公倍数，gcd是最大公约数
 ~~~
 
@@ -369,19 +351,96 @@ for (int i = 2; i < n; ++i) {
 
 时间复杂度O(n)
 
-#### 费马小定理
+#### 扩展欧几里得算法
 
-如果a和p互质，a^(p-1)≡1 (mod p)
+欧几里得算法是计算两个数的最大公约数（时间复杂度O(log(n)）
+
+~~~C++
+int gcd(int a,int b){
+    return b == 0 ? a : gcd(b, a % b);
+}
+~~~
+
+**扩展欧几里得算法的描述是：一定存在整数 x, y 满足等式 a * x + b * y = gcd(a,b)**，求解x, y
+
+![image-20220906224831745](Struct & algorithm.assets/image-20220906224831745.png)
+
+~~~C++
+int exgcd(int a, int b, int& x, int& y) {
+    if(a < b) return exgcd(b, a, y, x);
+    if(b == 0) {
+        x = 1; y = 0;
+        return a;
+    } else {
+        int x1;
+        int d = exgcd(b, a % b, x1, x);
+        y = x1 - a / b * x;
+        return d;
+    }
+}
+~~~
+
+![image-20220906224850731](Struct & algorithm.assets/image-20220906224850731.png)
+
+![image-20220906225744287](Struct & algorithm.assets/image-20220906225744287.png)
+
+~~~C++
+int inv(int n, int p) {
+    int x, y;
+    if(exgcd(n, p, x, y) == 1) {
+        x = x % p;
+        return x >= 0 ? x : p + x;
+    } else {
+        return -1;
+    }
+}
+~~~
+
+#### 费马小定理/欧拉定理
+
+**如果a和p互质**，a^(p-1)≡1 (mod p)
 如果p/q，我们需要一个E满足E×q≡p(mod(1e9+7))，则E=p*(q^1e9+7-2)
 
-### 卡特兰数
+#### 整数分块
 
-以最简单的括号匹配为例，左括号看成+1，右括号看成-1，这样一个合法的序列必须所有前缀和必然大于等于0，并且+1的数量等于-1的数量。
-则对于一个非法序列A，找到A的第一个前缀小于0的前缀，将前缀取反得到B，这样B就有n+1个+1以及n-1个-1的序列。由于，A只有一个**“第一个前缀小于0的前缀”**，所以每个A只能产生一个B。而每个B想要还原到A，就需要找到**“第一个前缀和大于0的前缀”**，显然B也只能产生一个A。这样合法的括号序列是
+![image-20220906231204261](Struct & algorithm.assets/image-20220906231204261.png)
 
-![image-20220801173423156](笔记.assets/image-20220801173423156.png)
+### 线性代数
 
-### 组合数+快速幂
+#### 矩阵快速幂
+
+~~~C++
+struct Matrix {
+    int n, m;
+    vvl a;
+    Matrix operator *(const Matrix& x)const {
+        Matrix res(this->n, x.m);
+        forn(i, res.n) {
+            forn(j, res.m) {
+                forn(k, res.m) res.a[i][j] = (res.a[i][j] + this->a[i][k] * (x.a[k][j])) % mod;
+            }
+        }
+        return res;
+    }
+    Matrix(int _n = 0, int _m = 0) {
+        n = _n; m = _n;
+        a = vvl(n, vl(m));
+    }
+};
+Matrix Pow(Matrix x, ll n) {
+    Matrix ret(x.n, x.n);
+    forn(i, ret.n) ret.a[i][i] = 1;
+    while (n) {
+        if (n & 1) ret = ret * x;
+        n >>= 1; x = x * x;
+    }
+    return ret;
+}
+~~~
+
+### 组合数学
+
+#### 组合数+逆元+快速幂
 
 ~~~C++
 vector<vector<int>> c(n, vector<int>(c));
@@ -428,40 +487,70 @@ ll A(int n, int r){
 
 函数inv是求x的逆元。ab≡1 (mod c)，则a是b的逆元，b是a的逆元。
 
-### 线性代数
+##### 多重集排列组合
 
-#### 矩阵快速幂
+有n个元素，共k种元素，可以区分不同的元素，但是不能区分同一种元素。
 
-~~~C++
-struct Matrix {
-    int n, m;
-    vvl a;
-    Matrix operator *(const Matrix& x)const {
-        Matrix res(this->n, x.m);
-        forn(i, res.n) {
-            forn(j, res.m) {
-                forn(k, res.m) res.a[i][j] = (res.a[i][j] + this->a[i][k] * (x.a[k][j])) % mod;
-            }
-        }
-        return res;
-    }
-    Matrix(int _n = 0, int _m = 0) {
-        n = _n; m = _n;
-        a = vvl(n, vl(m));
-    }
-};
-Matrix Pow(Matrix x, ll n) {
-    Matrix ret(x.n, x.n);
-    forn(i, ret.n) ret.a[i][i] = 1;
-    while (n) {
-        if (n & 1) ret = ret * x;
-        n >>= 1; x = x * x;
-    }
-    return ret;
-}
-~~~
+###### 多重集排列数
+
+假设多重集一共有N个元素。那么对这N个元素全排列，除掉相同元素的全排列的积即可。
+
+![image-20220906234137552](Struct & algorithm.assets/image-20220906234137552.png)
+
+###### 多重集组合数
+
+对于有N种元素的多重集S，选K个元素，注意是个不是种，的可行方案数。可以变成：现在有N个篮子，把K个元素扔进这些篮子里的方案数。注意，这种是特殊情况，也就是说，每种元素无限多个可供挑选。用隔板法答案是
+
+![image-20220906234653622](Struct & algorithm.assets/image-20220906234653622.png)
+
+现在有K个元素，分成N堆，也就是要往里插入N−1块板。按理讲应该是
+
+![image-20220906234834079](Struct & algorithm.assets/image-20220906234834079.png)
+
+但是因为允许有空集，也就是不插，那么就相当于每块板子插进去之后又产生了新元素，所以是这个答案。那么，根据多重集的限制，现在每种元素有一个数量上限，怎么办呢？可以采用容斥原理。上限是“至多放f[i]个”，那么如果我往这个里面放f[i]+1个，是不是就不合法了？把不合法的减去即可。
+
+#### 二项式定理
+
+#### 概率论--期望的线性性
+
+#### 容斥原理基础
+
+#### 常见数列
+
+##### 卡特兰数
+
+以最简单的括号匹配为例，左括号看成+1，右括号看成-1，这样一个合法的序列必须所有前缀和必然大于等于0，并且+1的数量等于-1的数量。
+则对于一个非法序列A，找到A的第一个前缀小于0的前缀，将前缀取反得到B，这样B就有n+1个+1以及n-1个-1的序列。由于，A只有一个**“第一个前缀小于0的前缀”**，所以每个A只能产生一个B。而每个B想要还原到A，就需要找到**“第一个前缀和大于0的前缀”**，显然B也只能产生一个A。这样合法的括号序列是
+
+![image-20220906233011902](Struct & algorithm.assets/image-20220906233011902.png)
+
+##### 拆分数
+
+##### 斯特林数
+
+##### 群论-置换
 
 ## 字符串
+
+### 字符串哈希
+
+![image-20220907101309086](Struct & algorithm.assets/image-20220907101309086.png)
+
+![image-20220907101328201](Struct & algorithm.assets/image-20220907101328201.png)
+
+~~~C++
+int prefix = 0, suffix = 0;
+int base = 31, mod = 1000000007, mul = 1;
+int happy = 0;
+for (int i = 1; i < n; ++i) {
+    prefix = ((long long)prefix * base + (s[i - 1] - 97)) % mod;
+    suffix = (suffix + (long long)(s[n - i] - 97) * mul) % mod;
+    if (prefix == suffix) {
+        happy = i;
+    }
+    mul = (long long)mul * base % mod;
+}
+~~~
 
 ### （0/1）字典树
 
@@ -598,6 +687,8 @@ string Manacher(string s) {
 
 时间复杂度：O(n)    空间复杂度：O(n)
 
+### 扩展kmp
+
 ## 数据结构
 
 ### 哈希映射
@@ -709,9 +800,13 @@ forn(i, n) {
 }
 ~~~
 
+### 对顶堆
+
 ### 树
 
 #### 树的基础
+
+##### 树的重心
 
 ##### 树的直径
 
