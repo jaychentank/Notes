@@ -496,6 +496,68 @@ N的范围为[1,100]
     forn(i, n) cout << ((ll)g[i] * f[i]) % m << endl;
     ~~~
 
+13. **W - Intervals**
+
+    ![image-20220907192141599](Problem & Contest.assets/image-20220907192141599.png)
+
+    ~~~C++
+    void pushdown(int v) {
+    	if (t[v].second) {
+    		t[v << 1].first += t[v].second;
+    		t[v << 1].second += t[v].second;
+    
+    		t[v << 1 | 1].first += t[v].second;
+    		t[v << 1 | 1].second += t[v].second;
+    
+    		t[v].second = 0;
+    	}
+    }
+    void update(int v, int l, int r, int L, int R, ll val) {
+    	if (R<l || L>r) return;
+    	if (L <= l && R >= r) {
+    		t[v].first += val;
+    		t[v].second += val;
+    		return;
+    	}
+    	pushdown(v);
+    	int mid = (l + r) >> 1;
+    	update(v << 1, l, mid, L, R, val);
+    	update(v << 1 | 1, mid + 1, r, L, R, val);
+    	t[v].first = max(t[v << 1].first, t[v << 1 | 1].first);
+    }
+    void solve() {
+    	int n, m; cin >> n >> m;
+    	t = vector<pll>(n << 2);
+    	vector<vector<pii>> g(n);
+    	forn(i, m) {
+    		int l, r, a; cin >> l >> r >> a; l--; r--;
+    		g[r].push_back({ l,a });
+    	}
+    	forn(i, n) {
+    		update(1, 0, n - 1, i, i, t[1].first);
+    		for (auto& [l, a] : g[i]) {
+    			update(1, 0, n - 1, l, i, a);
+    		}
+    	}
+    	cout << max(t[1].first, 0LL) << endl;
+    }
+    ~~~
+
+14. **X-Tower**
+
+    ![image-20220909222916370](Problem & Contest.assets/image-20220909222916370.png)
+
+    ~~~C++
+    sort(all(p));
+    vl dp(maxn);
+    forn(i, n) {
+    	rfort(j, p[i].w + p[i].s, p[i].w) {
+    		dp[j] = max(dp[j], dp[j - p[i].w] + p[i].v);
+    	}
+    }
+    cout << *max_element(all(dp)) << '\n';
+    ~~~
+
 ### 总结
 
 1. 集合和二进制是一一对应的

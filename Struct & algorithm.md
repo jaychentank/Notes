@@ -1,4 +1,4 @@
-# C++
+#  C++
 
 ```c++
 int __builtin_ffs(unsigned int x)
@@ -106,6 +106,10 @@ void shell_sort(vi& arr,int n){
 **二维差分**
 
 ![2](Struct & algorithm.assets/2.png)
+
+### 逆序对
+
+归并排序 or 树状数组
 
 ### 扫描线
 
@@ -467,7 +471,7 @@ ll pw(ll a, ll b) {
 
 ll inv(ll x) { return pw(x, MOD - 2); }
 
-int init = [&]() {
+int init = []() {
 	F[0] = 1;
 	for (int i = 1; i <= MX; i++) F[i] = F[i - 1] * i % MOD;
 	I[MX] = inv(F[MX]);
@@ -507,13 +511,47 @@ ll A(int n, int r){
 
 ![image-20220906234834079](Struct & algorithm.assets/image-20220906234834079.png)
 
-但是因为允许有空集，也就是不插，那么就相当于每块板子插进去之后又产生了新元素，所以是这个答案。那么，根据多重集的限制，现在每种元素有一个数量上限，怎么办呢？可以采用容斥原理。上限是“至多放f[i]个”，那么如果我往这个里面放f[i]+1个，是不是就不合法了？把不合法的减去即可。
+但是因为允许有空集，也就是不插，那么就相当于每块板子插进去之后又产生了新元素，所以是这个答案。
+
+但当每种元素是有限的时候
+
+~~~C++
+for(int i=0;i<n;i++)
+	for(int j=1;j<=m;j++)
+        for(int k=1;k<=a[i];k++)
+        	dp[i+1][j]+=dp[i][j-k];
+~~~
+
+但是这种写法复杂度较高
+
+<img src="Struct & algorithm.assets/Center.png" alt="img" style="zoom: 80%;" />
+
+分两种情况：
+
+情况1：j<=x[i]  （即j-1<x[i]）
+
+右边展开得到的是dp\[i-1][0] dp\[i-1][1] dp\[i-1][2]....dp\[i-1][j] 、 把最后一项拿出来，剩下的j-1项求和，但是我们写成这样：
+
+<img src="Struct & algorithm.assets/Center-16627239165773.png" alt="img" style="zoom:80%;" />
+
+且我们能轻易发现，这就是dp\[i][j-1]，也就是 dp[i][j]=dp\[i][j-1]+dp\[i-1][j];
+
+情况 2：  j>x[i]，同理可得dp\[i][j]=dp\[i][j-1]+dp\[i-1][j];
+
+~~~C++
+for(int i=0;i<n;i++)//核心代码
+	for(int j=1;j<=m;j++)
+    	if(j>=a[i]) dp[i+1][j]=dp[i+1][j-1]+dp[i][j]-dp[i][j-1-a[i]];
+        else dp[i+1][j]=dp[i+1][j-1]+dp[i][j];
+~~~
 
 #### 二项式定理
 
-#### 概率论--期望的线性性
+![image-20220910232258900](Struct & algorithm.assets/image-20220910232258900.png)
 
 #### 容斥原理基础
+
+![image-20220907235145927](Struct & algorithm.assets/image-20220907235145927.png)
 
 #### 常见数列
 
@@ -524,11 +562,7 @@ ll A(int n, int r){
 
 ![image-20220906233011902](Struct & algorithm.assets/image-20220906233011902.png)
 
-##### 拆分数
-
 ##### 斯特林数
-
-##### 群论-置换
 
 ## 字符串
 
@@ -802,11 +836,17 @@ forn(i, n) {
 
 ### 对顶堆
 
+例如用于解决求中位数问题
+
 ### 树
 
 #### 树的基础
 
 ##### 树的重心
+
+**定义**：计算无根树每个点为根节点时的最大子树大小
+
+**性质**：树中所有点到某个点的**距离和**中，到重心的距离和是最小的；如果有两个重心，那么到它们的距离和一样。反过来，距离和最小的点一定是重心。
 
 ##### 树的直径
 
@@ -935,11 +975,9 @@ void update(int v, int l, int r, int x, int V) {
 }
 int query(int v, int l, int r, int L, int R) {
 	if (l >= L && r <= R) return t[v];
-    if (r<L || l>R) return 0;
+    if (r < L || l > R) return 0;
 	int mid = (l + r) >> 1;
-	if (R <= mid) return query(v << 1, l, mid, L, R);
-	if (L > mid) return query(v << 1 | 1, mid + 1, r, L, R);
-	return query(v << 1, l, mid, L, R) + query(v << 1 | 1, mid + 1, r, L, R);
+    return query(v << 1, l, mid, L, R) + query(v << 1 | 1, mid + 1, r, L, R);
 }
 ```
 
@@ -971,26 +1009,26 @@ void push_down(int p, int len)
     mark(rs(p)) += mark(p);
     mark(p) = 0;
 }
-ll query(int v, int l, int r, int L, int R)
-{
-    if (l >= L && r <= R) return val(v);
-    push_down(v, r - l + 1);
-    ll mid = (l + r - 1) / 2, ans = 0;
-    if (mid >= l) ans += query(ls(p), l, mid, L ,R);
-    if (mid < r) ans += query(rs(p), mid + 1, r, L, R);
-    return ans;
-}
 void update(int v, int l, int r, int L, int R，int d)
 {
-    if (l >= L && r <= R){
-    	val(p) += d * (r - l + 1);
+    if (R<l || L>r) return;
+    if (l >= L && r <= R) {
+        val(p) += d * (r - l + 1);
         mark(p) += d
     }
     push_down(v, r - c + 1);
     int mid = (l + c - 1) / 2;
-    if (mid >= l) update(ls(v), l, mid, L, R, d);
-    if (mid < r) update(rs(v), mid + 1, r, L, R, d);
+    update(ls(v), l, mid, L, R, d);
+    update(rs(v), mid + 1, r, L, R, d);
     val(p) = val(ls(p)) + val(rs(p));
+}
+ll query(int v, int l, int r, int L, int R)
+{
+    if (R<l || L>r) return 0;
+    if (l >= L && r <= R) return val(v);
+    push_down(v, r - l + 1);
+    int mid = (l + r - 1) / 2;
+    return query(ls(p), l, mid, L, R) + query(rs(p), mid + 1, r, L, R);
 }
 ~~~
 
@@ -1021,6 +1059,7 @@ void pushdown(int v) {
 	}
 }
 void update(int v, int l, int r, int L, int R, int val) {
+	if (R<l || L>r) return;
 	if (L <= l && R >= r) {
 		t[v].first += val;
 		t[v].second += val;
@@ -1028,8 +1067,8 @@ void update(int v, int l, int r, int L, int R, int val) {
 	}
 	pushdown(v);
 	int mid = (l + r) >> 1;
-	if (L <= mid) update(v << 1, l, mid, L, R, val);
-	if (mid < R) update(v << 1 | 1, mid + 1, r, L, R, val);
+	update(v << 1, l, mid, L, R, val);
+	update(v << 1 | 1, mid + 1, r, L, R, val);
 	t[v].first = min(t[v << 1].first, t[v << 1 | 1].first);
 }
 int query(int v, int l, int r, int L, int R) {
@@ -1037,8 +1076,6 @@ int query(int v, int l, int r, int L, int R) {
 	if (r < L || l > R) return INT_MAX;
 	pushdown(v);
 	int mid = (l + r) >> 1;
-	if (R <= mid) return query(v << 1, l, mid, L, R);
-	if (L > mid) return query(v << 1 | 1, mid + 1, r, L, R);
 	return min(query(v << 1, l, mid, L, R), query(v << 1 | 1, mid + 1, r, L, R));
 }
 ~~~
@@ -1085,9 +1122,9 @@ public:
 };
 ~~~
 
-## 动态规划
+### st表
 
-### RMQ(区间最值问题)
+#### RMQ(区间最值问题)
 
 我们设二维数组dp\[i][j]表示从第i位开始连续 2^j 个数中的最大(小)值。
 
@@ -1109,6 +1146,33 @@ int rmq(int l, int r)
 {
 	int k = log2(r - l + 1);
 	return min(dp[l][k], dp[r - (1 << k) + 1][k]);
+}
+~~~
+
+## 动态规划
+
+### 背包问题
+
+#### 多重背包
+
+转换成01背包和完全背包 O(nml)
+
+~~~C++
+forn(i,n) {
+	if (s[i] * v[i] >= V)//转化为完全背包 
+	{
+		for (int j = v[i]; j <= V; j++)
+		{
+			f[j] = max(f[j - v[i]] + w[i], f[j]);
+		}
+	}
+	else //转化为 01背包 
+	{
+		for (int j = V; j >= v[i]; j--)
+			for (int k = s[i]; k >= 0; k--)
+				if (j >= k * v[i])
+					f[j] = max(f[j - k * v[i]] + k * w[i], f[j]);
+	}
 }
 ~~~
 
@@ -1189,7 +1253,43 @@ dfs(0,-1);
 dfs2
 ~~~
 
+### 计数dp
+
+应用于整数划分
+
 ## 图论
+
+### 最短路（Bellman-Ford）
+
+Bell-Ford算法专用处理**可能存在负环**的**有限路线单源最短路**问题。其实现方式是通过m次迭代求出从源点到终点**不超过m条边构成的最短路的路径**。一般情况下要求途中不存在**负环**。但是在边数有限制的情况下允许存在负环。因此Bellman-Ford算法是可以用来判断负环的。
+
+```cpp
+int dist[N],backup[N];//dist距离，backup用来存上一次的结果。
+struct edge//用来存边
+{
+    int a;
+    int b;
+    int w;
+}Edge[M];
+int Bellman_Ford()
+{
+    memset(dist, 0x3f, sizeof dist);
+    dist[1] = 0;//初始化
+    for(int i = 0 ; i < k ; i++)//遍历k次
+    {
+        memcpy(backup,dist,sizeof dist);//存上一次答案。
+        for(int j = 0 ; j < m ; j++)
+        {
+            int a = Edge[j].a, b = Edge[j].b, w = Edge[j].w;
+            dist[b] = min(dist[b],backup[a] + w);
+        }//遍历所有边
+    }
+    if(dist[n] > 0x3f3f3f3f/2) return -1;
+    /*这里不像Dijkstra写等于正无穷是因为可能有负权边甚至是负环的存在，
+    使得“正无穷”在迭代过程中受到一点影响。*/
+    return dist[n];
+}
+```
 
 ### 最小生成树
 
@@ -1326,3 +1426,20 @@ int Hungarian()
 ~~~
 
 时间复杂度：O(V*E)
+
+### 欧拉（回）路
+
+**欧拉路**指的是：存在这样一种图，可以从其中一点出发，不重复地走完其所有的边。如果欧拉路的起点与终点相同，则称之为**欧拉回路**。
+
+~~~C++
+void dfs(int u) {
+	int n = g[u].size();
+	rfort(i, n - 1, 0) {
+		int v = g[u][i];
+		g[u].pop_back();
+		dfs(v);
+	}
+	ans.push_back(u);
+}
+reverse(all(ans));
+~~~
