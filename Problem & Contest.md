@@ -277,144 +277,167 @@ N的范围为[1,100]
 
 ### Atcoder经典dp题
 
-1. **E - Knapsack 2**
+#### E - Knapsack 2
 
-2. **I - Coins**
+~~~C++
+forn(i, n) {
+	int w, v; cin >> w >> v;
+	for (int j = maxn - 1; j >= v; j--) dp[j] = min(dp[j], dp[j - v] + w);
+}
+int ans = 0;
+forn(i, maxn) if (dp[i] <= W) ans = i;
+~~~
 
-3. **J - Sushi**
-   ![image-20220817085846121](Problem & Contest.assets/image-20220817085846121.png)
+#### I - Coins
 
-4. **K-stones**
+~~~C++
+fort(i, 1, n + 1) {
+	forn(j, i) {
+		dp[i][j + 1] += dp[i - 1][j] * p[i - 1];
+		dp[i][j] += dp[i - 1][j] * (1.0 - p[i - 1]);
+	}
+}
+double ans = 0.0;
+forn(i, n + 1) {
+	if (i > n - i) ans += dp[n][i];
+}
+~~~
 
-   设置dp[i]: 取i颗石子的胜负情况，dp[i] 为真则先手胜，否则后手胜。
+#### J - Sushi
 
-   重点是找到破题点：剩余的石子中可以被一次刚好拿完的记下来，由此看一看剩 k个石子时能不能赢。
+![image-20220817085846121](Problem & Contest.assets/image-20220817085846121.png)
 
-   ~~~C++
-   fort(i, 1, k + 1) {
-   	forn(j, n) {
-   		if (i >= a[j] && g[i - a[j]] == 0) {
-   			g[i] = 1; break;
-   		}
-   	}
-   }
-   cout << (g[k] ? "First" : "Second") << endl;
-   ~~~
+#### K - stones
 
-5. **L-Deque**
+设置dp[i]: 取i颗石子的胜负情况，dp[i] 为真则先手胜，否则后手胜。
 
-   ~~~C++
-   forn(i, n) {
-   	cin >> a[i];
-   	dp[i][i] = a[i];
-   }
-   //dp[i][j]表示区间为(i,j)时，两个玩家玩得最优化时，X-Y的结果值
-   fort(l, 1, n) {
-   	for (int i = 0, j = l; j < n; i++, j++) {
-   		dp[i][j] = max(a[i] - dp[i + 1][j], a[j] - dp[i][j - 1]);
-   	}
-   }
-   cout << dp[0][n - 1] << endl;
-   ~~~
+重点是找到破题点：剩余的石子中可以被一次刚好拿完的记下来，由此看一看剩 k个石子时能不能赢。
 
-6. **M-Candies**
+~~~C++
+fort(i, 1, k + 1) {
+	forn(j, n) {
+		if (i >= a[j] && g[i - a[j]] == 0) {
+			g[i] = 1; break;
+		}
+	}
+}
+cout << (g[k] ? "First" : "Second") << endl;
+~~~
 
-   ~~~C++
-   //TLE做法
-   f[0] = 1;//f[i]是i个蛋糕分配得方案数
-   forn(i, n) {
-       int a; cin >> a;
-   	for (int j = m; j >= 0; j--)
-   	{
-   		fort (k, 1, a)
-   		{
-   			if (j >= k)f[j] += f[j - k];
-   		}
-   	}
-   }
-   cout << f[m] << endl;
-   ~~~
+#### L - Deque
 
-   ~~~C++
-   //优化做法 通过数组s来记录前缀和
-   vll f(k + 1), sum(k + 1); f[0] = 1;
-   forn(i, n) {
-   	int a; cin >> a;
-   	sum[0] = f[0];
-   	fort(j, 1, k + 1) sum[j] = (sum[j - 1] + f[j]) % MOD;
-   	forn(j, k + 1) {
-   		f[j] = sum[j];
-   		if (j > a) f[j] = (f[j] + MOD - sum[j - a - 1]) % MOD;
-   	}
-   }
-   cout << f[k] << endl;
-   ~~~
+~~~C++
+forn(i, n) {
+	cin >> a[i];
+	dp[i][i] = a[i];
+}
+//dp[i][j]表示区间为(i,j)时，两个玩家玩得最优化时，X-Y的结果值
+fort(l, 1, n) {
+	for (int i = 0, j = l; j < n; i++, j++) {
+		dp[i][j] = max(a[i] - dp[i + 1][j], a[j] - dp[i][j - 1]);
+	}
+}
+cout << dp[0][n - 1] << endl;
+~~~
 
-7. **O-matching(状压dp)**
+#### M - Candies
 
-   ~~~C++
-   vl dp(1 << n);
-   forn(i, n){
-       forn(j, n) cin >> a[i][j];
-   }
-   dp[0] = 1;
-   forn(i, n)
-   {
-       forn(j, 1 << n)//dp[j]为前i个男人匹配了j个女人的方案数
-       {
-           if (__builtin_popcount(j) != i)
-               continue;
-           forn(xx, n)
-           {
-               if (a[i][xx] && !((j >> xx) & 1))
-                   dp[j + (1 << xx)] = (dp[j + (1 << xx)] + dp[j]) % mod;
-           }
-       }
-   }
-   cout << dp.back() << endl;
-   ~~~
+~~~C++
+//TLE做法
+f[0] = 1;//f[i]是i个蛋糕分配得方案数
+forn(i, n) {
+    int a; cin >> a;
+	for (int j = m; j >= 0; j--)
+	{
+		fort (k, 1, a)
+		{
+			if (j >= k)f[j] += f[j - k];
+		}
+	}
+}
+cout << f[m] << endl;
+~~~
 
-8. **Q-Flowers**
+~~~C++
+//优化做法 通过数组s来记录前缀和
+vll f(k + 1), sum(k + 1); f[0] = 1;
+forn(i, n) {
+	int a; cin >> a;
+	sum[0] = f[0];
+	fort(j, 1, k + 1) sum[j] = (sum[j - 1] + f[j]) % MOD;
+	forn(j, k + 1) {
+		f[j] = sum[j];
+		if (j > a) f[j] = (f[j] + MOD - sum[j - a - 1]) % MOD;
+	}
+}
+cout << f[k] << endl;
+~~~
 
-   建立数组dp，dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在lognlogn的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
+#### O - matching(状压dp)
 
-   ~~~C++
-   //用树状数组修改和维护区间最大值
-   auto lowbit = [&](ll x) {
-       return x & (-x);
-   };
-   auto update = [&](ll m, ll x) {
-       while (m <= n) {
-           f[m] = max(f[m], x);
-           m += lowbit(m);
-       }
-   };
-   auto query = [&](ll m) {
-       ll res = 0;
-       while (m > 0) {
-           res = max(res, f[m]);
-           m -= lowbit(m);
-       }
-       return res;
-   };
-   
-   ll ans = 0;
-   forn(i, n) {
-       dp[i] = a[i] + query(h[i]);
-       ans = max(ans, dp[i]);
-       update(h[i], dp[i]);
-   }
-   ~~~
+~~~C++
+vl dp(1 << n);
+forn(i, n){
+    forn(j, n) cin >> a[i][j];
+}
+dp[0] = 1;
+forn(i, n)
+{
+    forn(j, 1 << n)//dp[j]为前i个男人匹配了j个女人的方案数
+    {
+        if (__builtin_popcount(j) != i)
+            continue;
+        forn(xx, n)
+        {
+            if (a[i][xx] && !((j >> xx) & 1))
+                dp[j + (1 << xx)] = (dp[j + (1 << xx)] + dp[j]) % mod;
+        }
+    }
+}
+cout << dp.back() << endl;
+~~~
 
-9. **R - Walk**
+#### Q - Flowers
 
-   DP+矩阵快速幂
+建立数组dp，dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在lognlogn的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
 
-   ![image-20220903220647461](Problem & Contest.assets/image-20220903220647461.png)
+~~~C++
+//用树状数组修改和维护区间最大值
+auto lowbit = [&](ll x) {
+    return x & (-x);
+};
+auto update = [&](ll m, ll x) {
+    while (m <= n) {
+        f[m] = max(f[m], x);
+        m += lowbit(m);
+    }
+};
+auto query = [&](ll m) {
+    ll res = 0;
+    while (m > 0) {
+        res = max(res, f[m]);
+        m -= lowbit(m);
+    }
+    return res;
+};
 
-   我们设a\[i][j]为从i走到j，走了k次的方案数，上图为k=0初始时的情况，此时只把从自己走到自己设为1作为初始状态。**那么怎样求k=1时的状态矩阵呢？只需要乘一次邻接矩阵即可**
+ll ans = 0;
+forn(i, n) {
+    dp[i] = a[i] + query(h[i]);
+    ans = max(ans, dp[i]);
+    update(h[i], dp[i]);
+}
+~~~
 
-10. **T-Permutation**(插入dp)
+#### R - Walk
+
+DP+矩阵快速幂
+
+![image-20220903220647461](Problem & Contest.assets/image-20220903220647461.png)
+
+我们设a\[i][j]为从i走到j，走了k次的方案数，上图为k=0初始时的情况，此时只把从自己走到自己设为1作为初始状态。**那么怎样求k=1时的状态矩阵呢？只需要乘一次邻接矩阵即可**
+
+#### T - Permutation(插入dp)
 
    ![image-20220905230040499](Problem & Contest.assets/image-20220905230040499.png)
 
@@ -436,127 +459,181 @@ N的范围为[1,100]
    fort(i, 1, n + 1) res = (res + f[n][i]) % mod;
    ~~~
 
-11. **U - Grouping**(状压dp)
+#### U - Grouping(状压dp)
 
-    ~~~c++
-    fort(k, 1, 1 << n) {
-        forn(i, n) {
-            fort(j, i + 1, n) {
-                if ((k >> i & 1) && (k >> j & 1)) {
-                    dp[k] += a[i][j];
-                }
-            }
-        }
-        for (int j = k & (k - 1); j; j = (j - 1) & k) {
-            dp[k] = max(dp[k], dp[k ^ j] + dp[j]);
-        }
-    }
-    ~~~
-
-12. **V - Subtree**
-
-    ![image-20220906193909696](Problem & Contest.assets/image-20220906193909696.png)
-
-    ~~~C++
-    function<void(int, int)> dfs1 = [&](int u, int p) {
-        f[u] = 1;
-        for (int& v : G[u]) {
-            if (v != p) {
-                dfs1(v, u);
-                f[u] = ((ll)f[u] * (f[v] + 1)) % m;
-            }
-        }
-        pre[u] = vi(G[u].size(), 1);
-        suf[u] = vi(G[u].size(), 1);
-        fort(i, 1, G[u].size()) {
-            pre[u][i] = pre[u][i - 1];
-            if (G[u][i - 1] ^ p) {
-                pre[u][i] = ((ll)pre[u][i] * (f[G[u][i - 1]] + 1)) % m;
-            }
-        }
-        rfort(i, G[u].size() - 2, 0) {
-            suf[u][i] = suf[u][i + 1];
-            if (G[u][i + 1] ^ p) {
-                suf[u][i] = ((ll)suf[u][i] * (f[G[u][i + 1]] + 1)) % m;
-            }
-        }
-    };
-    function<void(int, int)> dfs2 = [&](int u, int p) {
-        forn(i, G[u].size()) {
-            int v = G[u][i];
-            if (v != p) {
-                g[v] = ((((ll)pre[u][i] * suf[u][i]) % m) * g[u]) % m + 1;
-                dfs2(v, u);
-            }
-        }
-    };
-    dfs1(0, 0);
-    g[0] = 1;
-    dfs2(0, 0);
-    forn(i, n) cout << ((ll)g[i] * f[i]) % m << endl;
-    ~~~
-
-13. **W - Intervals**
-
-    ![image-20220907192141599](Problem & Contest.assets/image-20220907192141599.png)
-
-    ~~~C++
-    void pushdown(int v) {
-    	if (t[v].second) {
-    		t[v << 1].first += t[v].second;
-    		t[v << 1].second += t[v].second;
-    
-    		t[v << 1 | 1].first += t[v].second;
-    		t[v << 1 | 1].second += t[v].second;
-    
-    		t[v].second = 0;
-    	}
-    }
-    void update(int v, int l, int r, int L, int R, ll val) {
-    	if (R<l || L>r) return;
-    	if (L <= l && R >= r) {
-    		t[v].first += val;
-    		t[v].second += val;
-    		return;
-    	}
-    	pushdown(v);
-    	int mid = (l + r) >> 1;
-    	update(v << 1, l, mid, L, R, val);
-    	update(v << 1 | 1, mid + 1, r, L, R, val);
-    	t[v].first = max(t[v << 1].first, t[v << 1 | 1].first);
-    }
-    void solve() {
-    	int n, m; cin >> n >> m;
-    	t = vector<pll>(n << 2);
-    	vector<vector<pii>> g(n);
-    	forn(i, m) {
-    		int l, r, a; cin >> l >> r >> a; l--; r--;
-    		g[r].push_back({ l,a });
-    	}
-    	forn(i, n) {
-    		update(1, 0, n - 1, i, i, t[1].first);
-    		for (auto& [l, a] : g[i]) {
-    			update(1, 0, n - 1, l, i, a);
-    		}
-    	}
-    	cout << max(t[1].first, 0LL) << endl;
-    }
-    ~~~
-
-14. **X-Tower**
-
-    ![image-20220909222916370](Problem & Contest.assets/image-20220909222916370.png)
-
-    ~~~C++
-    sort(all(p));
-    vl dp(maxn);
+~~~c++
+fort(k, 1, 1 << n) {
     forn(i, n) {
-    	rfort(j, p[i].w + p[i].s, p[i].w) {
-    		dp[j] = max(dp[j], dp[j - p[i].w] + p[i].v);
-    	}
+        fort(j, i + 1, n) {
+            if ((k >> i & 1) && (k >> j & 1)) {
+                dp[k] += a[i][j];
+            }
+        }
     }
-    cout << *max_element(all(dp)) << '\n';
-    ~~~
+    for (int j = k & (k - 1); j; j = (j - 1) & k) {
+        dp[k] = max(dp[k], dp[k ^ j] + dp[j]);
+    }
+}
+~~~
+
+V - Subtree
+
+![image-20220906193909696](Problem & Contest.assets/image-20220906193909696.png)
+
+~~~C++
+function<void(int, int)> dfs1 = [&](int u, int p) {
+    f[u] = 1;
+    for (int& v : G[u]) {
+        if (v != p) {
+            dfs1(v, u);
+            f[u] = ((ll)f[u] * (f[v] + 1)) % m;
+        }
+    }
+    pre[u] = vi(G[u].size(), 1);
+    suf[u] = vi(G[u].size(), 1);
+    fort(i, 1, G[u].size()) {
+        pre[u][i] = pre[u][i - 1];
+        if (G[u][i - 1] ^ p) {
+            pre[u][i] = ((ll)pre[u][i] * (f[G[u][i - 1]] + 1)) % m;
+        }
+    }
+    rfort(i, G[u].size() - 2, 0) {
+        suf[u][i] = suf[u][i + 1];
+        if (G[u][i + 1] ^ p) {
+            suf[u][i] = ((ll)suf[u][i] * (f[G[u][i + 1]] + 1)) % m;
+        }
+    }
+};
+function<void(int, int)> dfs2 = [&](int u, int p) {
+    forn(i, G[u].size()) {
+        int v = G[u][i];
+        if (v != p) {
+            g[v] = ((((ll)pre[u][i] * suf[u][i]) % m) * g[u]) % m + 1;
+            dfs2(v, u);
+        }
+    }
+};
+dfs1(0, 0);
+g[0] = 1;
+dfs2(0, 0);
+forn(i, n) cout << ((ll)g[i] * f[i]) % m << endl;
+~~~
+
+#### W - Intervals
+
+![image-20220907192141599](Problem & Contest.assets/image-20220907192141599.png)
+
+~~~C++
+void pushdown(int v) {
+	if (t[v].second) {
+		t[v << 1].first += t[v].second;
+		t[v << 1].second += t[v].second;
+
+		t[v << 1 | 1].first += t[v].second;
+		t[v << 1 | 1].second += t[v].second;
+
+		t[v].second = 0;
+	}
+}
+void update(int v, int l, int r, int L, int R, ll val) {
+	if (R<l || L>r) return;
+	if (L <= l && R >= r) {
+		t[v].first += val;
+		t[v].second += val;
+		return;
+	}
+	pushdown(v);
+	int mid = (l + r) >> 1;
+	update(v << 1, l, mid, L, R, val);
+	update(v << 1 | 1, mid + 1, r, L, R, val);
+	t[v].first = max(t[v << 1].first, t[v << 1 | 1].first);
+}
+void solve() {
+	int n, m; cin >> n >> m;
+	t = vector<pll>(n << 2);
+	vector<vector<pii>> g(n);
+	forn(i, m) {
+		int l, r, a; cin >> l >> r >> a; l--; r--;
+		g[r].push_back({ l,a });
+	}
+	forn(i, n) {
+		update(1, 0, n - 1, i, i, t[1].first);
+		for (auto& [l, a] : g[i]) {
+			update(1, 0, n - 1, l, i, a);
+		}
+	}
+	cout << max(t[1].first, 0LL) << endl;
+}
+~~~
+
+#### X - Tower
+
+![image-20220909222916370](Problem & Contest.assets/image-20220909222916370.png)
+
+~~~C++
+sort(all(p));
+vl dp(maxn);
+forn(i, n) {
+	rfort(j, p[i].w + p[i].s, p[i].w) {
+		dp[j] = max(dp[j], dp[j - p[i].w] + p[i].v);
+	}
+}
+cout << *max_element(all(dp)) << '\n';
+~~~
+
+#### Y - Grid 2
+
+![image-20220911183453639](Problem & Contest.assets/image-20220911183453639.png)
+
+~~~C++
+forn(i, n) {
+	forn(j, i) {
+		if (p[j].first <= p[i].first && p[j].second <= p[i].second) {
+			int x = p[i].first - p[j].first + 1, y = p[i].second - p[j].second + 1;
+			dp[i] = (dp[i] - dp[j] * C(x + y - 2, x - 1) % mod + mod) % mod;
+		}
+	}
+}
+ll ans = C(h + w - 2, h - 1);
+forn(i, n) {
+	int x = h - p[i].first + 1, y = w - p[i].second + 1;
+	ans = (ans - dp[i] * C(x + y - 2, x - 1) % mod + mod) % mod;
+}
+~~~
+
+#### Z - Frog 3
+
+斜率优化的dp
+
+![image-20220911223625495](Problem & Contest.assets/image-20220911223625495.png)
+
+![image-20220911223638005](Problem & Contest.assets/image-20220911223638005.png)
+
+~~~C++
+auto getx = [&](int i) {
+	return a[i];
+};
+auto gety = [&](int i) {
+	return dp[i] + pow2(a[i]);
+};
+auto push_check = [&](int j, int k, int i) {
+	return gety(k) - gety(j) < 2 * a[i] * (getx(k) - getx(j));
+};
+auto pop_check = [&](int j, int k, int i) {
+	return (gety(k) - gety(j)) * (getx(i) - getx(k)) >
+		(gety(i) - gety(k)) * (getx(k) - getx(j));
+};
+
+int l = 0, r = -1;
+q[++r] = 0;
+fort(i, 1, n) {
+	while (l < r && push_check(q[l], q[l + 1], i)) l++;
+	dp[i] = dp[q[l]] + pow2(a[i] - a[q[l]]) + m;
+	while (l < r && pop_check(q[r - 1], q[r], i)) --r;
+	q[++r] = i;
+}
+cout << dp.back() << endl;
+~~~
 
 ### 总结
 

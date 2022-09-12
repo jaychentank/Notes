@@ -459,31 +459,32 @@ for (int i = 2; i < n; ++i) {
 时间复杂度O(n^2)
 
 ~~~C++
+vl F(maxn + 1), I(maxn + 1);
 ll pw(ll a, ll b) {
 	ll res = 1;
 	while (b) {
-		if (b & 1) res = res * a % MOD;
-		a = a * a % MOD;
+		if (b & 1) res = res * a % mod;
+		a = a * a % mod;
 		b >>= 1;
 	}
 	return res;
 }
 
-ll inv(ll x) { return pw(x, MOD - 2); }
+ll inv(ll x) { return pw(x, mod - 2); }
 
 int init = []() {
 	F[0] = 1;
-	for (int i = 1; i <= MX; i++) F[i] = F[i - 1] * i % MOD;
-	I[MX] = inv(F[MX]);
-	for (int i = MX - 1; i >= 0; i--) I[i] = I[i + 1] * (i + 1) % MOD;
+	for (int i = 1; i <= maxn; i++) F[i] = F[i - 1] * i % mod;
+	I[maxn] = inv(F[maxn]);
+	for (int i = maxn - 1; i >= 0; i--) I[i] = I[i + 1] * (i + 1) % mod;
 	return 0;
 }();
 
 ll C(int n, int r) {
-	return F[n] * I[r] % MOD * I[n - r] % MOD;
+	return F[n] * I[r] % mod * I[n - r] % mod;
 }
 ll A(int n, int r){
-    return F[n] * I[r] % MOD;
+    return F[n] * I[r] % mod;
 }
 ~~~
 
@@ -491,17 +492,17 @@ ll A(int n, int r){
 
 函数inv是求x的逆元。ab≡1 (mod c)，则a是b的逆元，b是a的逆元。
 
-##### 多重集排列组合
+#### 多重集排列组合
 
 有n个元素，共k种元素，可以区分不同的元素，但是不能区分同一种元素。
 
-###### 多重集排列数
+##### 多重集排列数
 
 假设多重集一共有N个元素。那么对这N个元素全排列，除掉相同元素的全排列的积即可。
 
 ![image-20220906234137552](Struct & algorithm.assets/image-20220906234137552.png)
 
-###### 多重集组合数
+##### 多重集组合数
 
 对于有N种元素的多重集S，选K个元素，注意是个不是种，的可行方案数。可以变成：现在有N个篮子，把K个元素扔进这些篮子里的方案数。注意，这种是特殊情况，也就是说，每种元素无限多个可供挑选。用隔板法答案是
 
@@ -1155,26 +1156,71 @@ int rmq(int l, int r)
 
 #### 多重背包
 
-转换成01背包和完全背包 O(nml)
+##### 朴素做法
 
 ~~~C++
-forn(i,n) {
-	if (s[i] * v[i] >= V)//转化为完全背包 
-	{
-		for (int j = v[i]; j <= V; j++)
-		{
-			f[j] = max(f[j - v[i]] + w[i], f[j]);
+for (int i = 1; i <= N; i++) {
+	//读入体积,价值,件数
+	cin >> v >> w >> s;
+	for (int j = V; j >= 0; j--) {
+		//注意k*v一定小于j
+		for (int k = 1; k <= s && k * v <= j; k++) {
+			dp[j] = max(dp[j], dp[j - k * v] + k * w);//01背包一维动态方程,当前体积为j的最优解
 		}
-	}
-	else //转化为 01背包 
-	{
-		for (int j = V; j >= v[i]; j--)
-			for (int k = s[i]; k >= 0; k--)
-				if (j >= k * v[i])
-					f[j] = max(f[j - k * v[i]] + k * w[i], f[j]);
 	}
 }
 ~~~
+
+时间复杂度：O(nml)
+
+##### 二进制优化做法
+
+~~~C++
+for (int i = 1; i <= n; i++)
+{
+    int a, b, s;//体积,价值,数量
+    scanf("%d%d%d", &a, &b, &s);
+    //将s件用二进制转换为log2s堆
+    for (int k = 1; k <= s; k <<= 1)
+    {
+        v[++cnt] = k * a;//前++,第1种,第二种.....
+        w[cnt] = k * b;
+        s -= k;
+    }
+    if (s)//s有剩余,自立为新品种
+    {
+        v[++cnt] = s * a;
+        w[cnt] = s * b;
+    }
+}
+//01背包做法
+for (int i = 1; i <= cnt; i++)
+{
+    for (int j = m; j >= v[i]; j--)
+    {
+        dp[j] = max(dp[j], dp[j - v[i]] + w[i]);//动态转移方程和01背包完全相同
+    }
+}
+~~~
+
+时间复杂度 O(V*Σlog n[i])
+
+#### 树形背包
+
+给定一棵有n个节点的点权树，要求从中选出m个节点，使得这些选出的节点的点权和最大，一个节点的**父节点**被选之后才可以**选择**。题目一般是一个物品只能依赖一个物品，但一个物品可以被多个物品依赖。
+
+~~~C++
+for (int& v:g[u]){
+    if (v==p) continue;
+    dfs(v, u, V - val[u]);
+    for (int j = m; j >= val[u]; --j)
+        for (int k = 0; k <= j - val[u]; ++k)
+            f[u][j] = max(f[u][j], f[u][j - k - val[u]] + f[v][k] + w[u]);
+}
+~~~
+
+复杂度为O(n3)
+因为遍历整棵树是O(n)的，而选取子节点和i是O(m2)的所以整个程序的复杂度为O(nm2)
 
 ### 数位dp
 
