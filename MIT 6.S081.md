@@ -207,11 +207,13 @@ https://blog.csdn.net/u013577996/article/details/108680888
 
 2. pipe将一个大小为2的int数组中的p[0],p[1]连接成一个管道，用于实现进程间通信，通常1是写端，0是读端。
 
-3. struct stat这个结构体是用来描述一个系统文件系统中的文件属性的结构。
+3. struct dirent为目录结构体，有两个属性：inum为目录下的文件数，name为目录名。struct stat为文件结构体 ，其中有用的属性是type，标识当前文件的类型(T_DIR 为目录，T_FILE为文件)。
 
-   fstat用于获取文件状态。
+   fstat(int fd, struct stat*) 将文件描述符fd指向的文件信息存入到结构体指针stat中 。st保存了文件的信息，根据属性st.type判断文件的类型，如果当前文件类型为T_FILE则直接比较当前文件名与目标文件名是否相同，若相同，输出当前文件的路径。如果当前文件类型为T_DIR则说明当前文件是一个目录，用read 读取此目录下的所有文件，并对每一个文件递归调用find函数即可。
 
-   
+   当目录下文件数为0时，即de.inum==0，不应递归调用。
+
+   当递归调用find 函数时，需要忽略.和..，.为当前目录，需要忽略，否则造成程序死循环，..为上一层目录，不应在上一层目录搜索。
 
 ## Lec03 OS Organization and System Calls (Frans)
 
@@ -226,8 +228,8 @@ https://blog.csdn.net/u013577996/article/details/108680888
 
 #### 为什么需要隔离性？
 
-1. **不同的应用程序之间有强隔离性**，这样某个应用程序出了问题不会杀掉其他进程。
-2. 应用程序和操作系统之间有强隔离性，应用程序出现问题操作系统也不会崩溃。
+1. 不同的应用程序之间有强隔离性，**这样某个应用程序出了问题不会杀掉其他进程**。
+2. 应用程序和操作系统之间有强隔离性，**应用程序出现问题操作系统也不会崩溃**。
 
 通常来说，如果没有操作系统，应用程序会直接与硬件交互。比如，应用程序可以直接看到CPU的多个核，看到磁盘，内存。所以现在应用程序和硬件资源之间没有一个额外的抽象层，如下图所示。
 
@@ -235,7 +237,7 @@ https://blog.csdn.net/u013577996/article/details/108680888
 
 #### multiplexing和内存隔离
 
-**使用操作系统的一个目的是为了同时运行多个应用程序，CPU会从一个应用程序切换到另一个应用程序**。我们假设硬件资源里只有一个CPU核，并且我们现在在这个CPU核上运行Shell。但是时不时的，也需要让其他的应用程序也可以运行。**现在我们没有操作系统来帮我们完成切换，所以Shell就需要时不时的释放CPU资源。**
+**使用操作系统的一个目的是为了同时运行多个应用程序，CPU会从一个应用程序切换到另一个应用程序**。我们假设硬件资源里只有一个CPU核，并且我们现在在这个CPU核上运行Shell。但是时不时的，也需要让其他的应用程序也可以运行。
 
 为了不变成一个恶意程序，Shell在发现自己运行了一段时间之后，需要让别的程序也有机会能运行。这种机制有时候称为**协同调度**（Cooperative Scheduling）。但是这里的场景并没有很好的隔离性，比如说**Shell中的某个函数有一个死循环，那么Shell永远也不会释放CPU，进而其他的应用程序也不能够运行，甚至都不能运行一个第三方的程序来停止或者杀死Shell程序。**所以这种场景下，我们基本上得不到真正的multiplexing（CPU在多进程同分时复用）。而这个特性是非常有用的，**不论应用程序在执行什么操作，multiplexing（CPU在多进程同分时复用）都会迫使应用程序时不时的释放CPU，这样其他的应用程序才能运行。**
 
@@ -293,17 +295,12 @@ https://blog.csdn.net/u013577996/article/details/108680888
 >
 > A：BIOS是一段计算机自带的代码，它会先启动，之后它会启动操作系统，所以BIOS需要是一段可被信任的代码，它最好是正确的，且不是恶意的。
 >
-> Q：之前提到，设置处理器中kernel mode的bit位的指令是一条特殊权限指令，那么一个用户程序怎么才能让内核执行任何内核指令？因为现在切换到kernel mode的指令都是一条特殊权限指令了，对于用户程序来说也没法修改那个bit位。
->
-> A：你说的对，这也是我们想要看到的结果。可以这么来看这个问题，首先这里不是完全按照你说的方式工作，**在RISC-V中，如果你在用户空间（user space）尝试执行一条特殊权限指令，用户程序会通过系统调用来切换到kernel mode。当用户程序执行系统调用，会通过ECALL触发一个软中断（software interrupt），软中断会查询操作系统预先设定的中断向量表，并执行中断向量表中包含的中断处理程序。中断处理程序在内核中，这样就完成了user mode到kernel mode的切换，并执行用户程序想要执行的特殊权限指令。**
 
 #### 虚拟内存
 
 基本上来说，处理器包含了page table，而page table将虚拟内存地址与物理内存地址做了对应。
 
 **每一个进程都会有自己独立的page table，这样的话，每一个进程只能访问出现在自己page table中的物理内存。操作系统会设置page table，使得每一个进程都有不重合的物理内存**，这样一个进程就不能访问其他进程的物理内存，因为其他进程的物理内存都不在它的page table中。**一个进程甚至都不能随意编造一个内存地址，然后通过这个内存地址来访问其他进程的物理内存。这样就给了我们内存的强隔离性**。
-
-基于硬件的支持，我们可以重新画一下之前的一张图，我们先画一个矩形，ls程序位于这个矩形中；再画一个矩形，echo程序位于这个矩形中。每个矩形都有一个虚拟内存地址，从0开始到2的n次方。
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJRnQQkLpnAR3xcpBOe%2F-MJSJsZ87csgExhbDSw1%2Fimage.png" alt="img" style="zoom: 50%;" />
 
@@ -313,9 +310,7 @@ https://blog.csdn.net/u013577996/article/details/108680888
 
 我们可以认为user/kernel mode是分隔用户空间和内核空间的边界，用户空间运行的程序运行在user mode，内核空间的程序运行在kernel mode。操作系统位于内核空间。
 
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJRnQQkLpnAR3xcpBOe%2F-MJSLRk51PCuHwzbLCIs%2Fimage.png" alt="img" style="zoom: 50%;" />
-
-你们应该将这张图记在你们的脑子中。但是基于我们已经介绍的内容，这张图有点太过严格了。**因为我们用矩形包括了一个程序的所有部分，但是这里没有描述如何从一个矩形将控制权转移到另一个矩形的，而很明显这种转换是需要的。**
+**因为我们用矩形包括了一个程序的所有部分，但是这里没有描述如何从一个矩形将控制权转移到另一个矩形的，而很明显这种转换是需要的。**
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJRnQQkLpnAR3xcpBOe%2F-MJSMyew-n45ZU01CtUw%2Fimage.png" alt="img" style="zoom:50%;" />
 
@@ -331,40 +326,20 @@ https://blog.csdn.net/u013577996/article/details/108680888
 
 **用户空间和内核空间的界限是一个硬性的界限，用户不能直接调用fork，用户的应用程序执行系统调用的唯一方法就是通过这里的ECALL指令。**
 
-> Q：当应用程序表现的恶意或者就是在一个死循环中，内核是如何夺回控制权限的？
->
-> A：内核会通过硬件设置一个定时器，定时器到期之后会将控制权限从用户空间转移到内核空间，之后内核就有了控制能力并可以重新调度CPU到另一个进程中。
-
 ### 3.5 宏内核 vs 微内核(Monolithic Kernel vs Micro Kernel)
 
-现在，我们有了一种方法，可以通过系统调用或者说ECALL指令，将控制权从应用程序转到操作系统中。之后内核负责实现具体的功能并检查参数以确保不会被一些坏的参数所欺骗。所以**内核有时候也被称为可被信任的计算空间**（Trusted Computing Base），在一些安全的术语中也被称为TCB。
+**内核有时候也被称为可被信任的计算空间**（Trusted Computing Base），**内核首先要是正确且没有Bug的**。假设内核中有Bug，攻击者可能会利用那个Bug，并将这个Bug转变成漏洞，这个漏洞使得攻击者可以打破操作系统的隔离性并接管内核。
 
-基本上来说，要被称为TCB，**内核首先要是正确且没有Bug的**。假设内核中有Bug，攻击者可能会利用那个Bug，并将这个Bug转变成漏洞，这个漏洞使得攻击者可以打破操作系统的隔离性并接管内核。
+让整个操作系统代码都运行在kernel mode，这种形式被称为**Monolithic Kernel Design**（宏内核）。
 
-一个有趣的问题是，什么程序应该运行在kernel mode？敏感的代码肯定是运行在kernel mode，因为这是Trusted Computing Base。
-
-其中一个选项是让整个操作系统代码都运行在kernel mode。大多数的Unix操作系统实现都运行在kernel mode。比如，XV6中，所有的操作系统服务都在kernel mode中，这种形式被称为**Monolithic Kernel Design**（宏内核）。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJbSdGiMLB2VO1kFUtK%2F-MJbVJDYYOlA_ZnJBg_i%2Fimage.png" alt="img" style="zoom: 50%;" />
-
-
-
-1. 首先，如果考虑Bug的话，这种方式不太好。在一个宏内核中，任何一个操作系统的Bug都有可能成为漏洞。因为我们现在在内核中运行了一个巨大的操作系统，出现Bug的可能性更大了。如果有许多行代码运行在内核中，那么出现严重Bug的可能性也变得更大。所以从安全的角度来说，在内核中有大量的代码是宏内核的缺点。
-2. 另一方面，如果你去看一个操作系统，它包含了各种各样的组成部分，比如说文件系统，虚拟内存，进程管理，这些都是操作系统内实现了特定功能的子模块。宏内核的优势在于，因为这些子模块现在都位于同一个程序中，**它们可以紧密的集成在一起，这样的集成提供很好的性能。**
+1. 首先，如果考虑Bug的话，这种方式不太好。在一个宏内核中，任何一个操作系统的Bug都有可能成为漏洞。因为我们现在在内核中运行了一个巨大的操作系统，出现Bug的可能性更大了。**如果有许多行代码运行在内核中，那么出现严重Bug的可能性也变得更大**。所以从安全的角度来说，在内核中有大量的代码是宏内核的缺点。
+2. 宏内核的优势在于，因为这些子模块现在都位于同一个程序中，**它们可以紧密的集成在一起，这样的集成提供很好的性能。**
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJbSdGiMLB2VO1kFUtK%2F-MJbYtEBzpGpaCAFdeZk%2Fimage.png" alt="img" style="zoom:33%;" />
 
-另一种设计被称为**Micro Kernel Design**（微内核）。在这种模式下，希望在kernel mode中运行尽可能少的代码。所以这种设计下还是有内核，**但是内核只有非常少的几个模块**，例如，内核通常会有一些IPC的实现或者是Message passing；非常少的虚拟内存的支持，可能只支持了page table；以及分时复用CPU的一些支持。
+另一种设计被称为**Micro Kernel Design**（微内核）。在这种模式下，希望在kernel mode中运行尽可能少的代码。所以这种设计下还是有内核，**但是内核只有非常少的几个模块**
 
-微内核的目的在于将大部分的操作系统运行在内核之外。所以，我们还是会有user mode以及user/kernel mode的边界。但是我们现在会将原来在内核中的其他部分，作为普通的用户程序来运行。比如文件系统可能就是个常规的用户空间程序。
-
-现在，文件系统运行的就像一个普通的用户程序，就像echo，Shell一样，这些程序都运行在用户空间。可能还会有一些其他的用户应用程序，例如虚拟内存系统的一部分也会以一个普通的应用程序的形式运行在user mode。
-
-某种程度上来说，这是一种好的设计。因为在内核中的代码的数量较小，更少的代码意味着更少的Bug。
-
-但是这种设计也有相应的问题。假设我们需要让Shell能与文件系统交互，比如Shell调用了exec，必须有种方式可以接入到文件系统中。通常来说，这里工作的方式是，Shell会通过内核中的IPC系统发送一条消息，内核会查看这条消息并发现这是给文件系统的消息，之后内核会把消息发送给文件系统。
-
-文件系统会完成它的工作之后会向IPC系统发送回一条消息说，这是你的exec系统调用的结果，之后IPC系统再将这条消息发送给Shell。
+微内核的目的在于将大部分的操作系统运行在内核之外。所以，我们还是会有user mode以及user/kernel mode的边界。但是我们现在会将原来在内核中的其他部分，作为普通的用户程序来运行。
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJbSdGiMLB2VO1kFUtK%2F-MJbcquRoZotyofyd2sh%2Fimage.png" alt="img" style="zoom: 33%;" />
 
@@ -399,11 +374,11 @@ https://blog.csdn.net/u013577996/article/details/108680888
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJdmgC_aByY8_wjKNKA%2F-MJgXiV2KBGQeuPgX4Bj%2Fimage.png" alt="img" style="zoom:67%;" />
 
-**这里生成的内核文件就是我们将会在QEMU中运行的文件**。同时，为了你们的方便，Makefile还会创建**kernel.asm，这里包含了内核的完整汇编语言，你们可以通过查看它来定位究竟是哪个指令导致了Bug**。比如，我接下来查看kernel.asm文件，我们可以看到用汇编指令描述的内核：
+**这里生成的内核文件就是我们将会在QEMU中运行的文件**。同时，为了你们的方便，Makefile还会创建**kernel.asm，这里包含了内核的完整汇编语言，你们可以通过查看它来定位究竟是哪个指令导致了Bug**。
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJdmgC_aByY8_wjKNKA%2F-MJgYi8MwG-QEqdvZ63Q%2Fimage.png" alt="img" style="zoom: 67%;" />
 
-这里你们可能已经注意到了，第一个指令位于地址0x80000000，对应的是一个RISC-V指令：auipc指令。
+第一个指令位于地址0x80000000，对应的是一个RISC-V指令：auipc指令。
 
 接下来，让我们不带gdb运行XV6（**make会读取Makefile文件中的指令**）。**这里会编译文件，然后调用QEMU（qemu-system-riscv64指令）。这里本质上是通过C语言来模拟仿真RISC-V处理器。**
 
@@ -423,29 +398,7 @@ https://blog.csdn.net/u013577996/article/details/108680888
 
 ### 3.7 QEMU
 
-QEMU表现的就像一个真正的计算机一样。当你想到QEMU时，你不应该认为它是一个C程序，你应该把它想成是下图，一个真正的主板。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJgYxe3Ki7wfpMQgXe-%2F-MJghmTlvFOKAnfGeveB%2Fimage.png" alt="img" style="zoom:50%;" />
-
-它可以启动一个XV6。当你通过QEMU来运行你的内核时，你应该认为你的内核是运行在这样一个主板之上。主板有一个开关，一个RISC-V处理器，有支持外设的空间，比如说一个接口是连接网线的，一个是PCI-E插槽，主板上还有一些内存芯片，这是一个你可以在上面编程的物理硬件，而XV6操作系统管理这样一块主板。
-
-对于RISC-V，有完整的文档介绍，比如说下图是一个RISC-V的结构图：
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJgYxe3Ki7wfpMQgXe-%2F-MJgjgTH1N3waADySy12%2Fimage.png" alt="img" style="zoom: 80%;" />
-
-这个图里面有：
-
-1. 4个核：U54 Core 1-4
-2. L2 cache：Banked L2
-3. 连接DRAM的连接器：DDR Controller
-4. 各种连接外部设备的方式，比如说UART0，一端连接了键盘，另一端连接了terminal。
-5. 以及连接了时钟的接口：Clock Generation
-
-我们后面会讨论更多的细节，但是这里基本上就是RISC-V处理器的所有组件，你通过它与实际的硬件交互。
-
-**当我们说QEMU仿真了RISC-V处理器时，背后的含义是什么？直观来看，QEMU是一个大型的开源C程序，你可以下载或者git clone它。但是在内部，在QEMU的主循环中，只在做一件事情：读取4字节或者8字节的RISC-V指令。解析RISC-V指令，并找出对应的操作码（op code）。我们之前在看kernel.asm的时候，看过一些操作码的二进制版本。通过解析，或许可以知道这是一个ADD指令，或者是一个SUB指令。**
-
-之后，在软件中执行相应的指令。
+**当我们说QEMU仿真了RISC-V处理器时，背后的含义是什么？直观来看，QEMU是一个大型的开源C程序，你可以下载或者git clone它。但是在内部，在QEMU的主循环中，只在做一件事情：读取4字节或者8字节的RISC-V指令。解析RISC-V指令，并找出对应的操作码（op code）。我们之前在看kernel.asm的时候，看过一些操作码的二进制版本。通过解析，或许可以知道这是一个ADD指令，或者是一个SUB指令。**之后，在软件中执行相应的指令。
 
 这基本上就是QEMU的全部工作了，对于每个CPU核，QEMU都会运行这么一个循环。
 
@@ -463,9 +416,7 @@ QEMU表现的就像一个真正的计算机一样。当你想到QEMU时，你不
 
 **首先，我会启动QEMU，并打开gdb。本质上来说QEMU内部有一个gdb server，当我们启动之后，QEMU会等待gdb客户端连接。**
 
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlp5nnqbQKpEdsEdt7%2F-MJlqR3qqukigoqwoSGg%2Fimage.png" alt="img" style="zoom: 80%;" />
-
-我会在我的计算机上再启动一个gdb客户端，这里是一个RISC-V 64位Linux的gdb，在连接上之后，我会在程序的入口处设置一个端点，因为我们知道这是QEMU会跳转到的第一个指令。
+我会在我的计算机上**再启动一个gdb客户端**，这里是一个RISC-V 64位Linux的gdb，在连接上之后，我会在程序的入口处设置一个端点，因为我们知道这是QEMU会跳转到的第一个指令。
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlp5nnqbQKpEdsEdt7%2F-MJls4laZcPl0Xuf6XVJ%2Fimage.png" alt="img" style="zoom:67%;" />
 
@@ -481,7 +432,7 @@ QEMU表现的就像一个真正的计算机一样。当你想到QEMU时，你不
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlp5nnqbQKpEdsEdt7%2F-MJlum8m8tZjc6IfaDfw%2Fimage.png" alt="img" style="zoom: 50%;" />
 
-我们可以看到，这个文件定义了内核是如何被加载的，从这里也可以看到，内核使用的起始地址就是QEMU指定的0x80000000这个地址。这就是我们操作系统最初运行的步骤。回到gdb，我们可以看到gdb也显示了指令的二进制编码
+我们可以看到，这个文件定义了**内核是如何被加载的，从这里也可以看到，内核使用的起始地址就是QEMU指定的0x80000000这个地址。这就是我们操作系统最初运行的步骤**。回到gdb，我们可以看到gdb也显示了指令的二进制编码
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlp5nnqbQKpEdsEdt7%2F-MJlvpQK6UN3ZE0x6K10%2Fimage.png" alt="img" style="zoom:67%;" />
 
@@ -489,17 +440,7 @@ QEMU表现的就像一个真正的计算机一样。当你想到QEMU时，你不
 
 ![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlxDELJZKUZ7wmW49T%2F-MJoBrC5i9D26QWYxztK%2Fimage.png)
 
-上图中，左下是gdb的断点显示，右边是main函数的源码。接下来，我想运行在gdb的layout split模式：
-
-![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlxDELJZKUZ7wmW49T%2F-MJoCZsIhe8t7K-YbT-2%2Fimage.png)
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlxDELJZKUZ7wmW49T%2F-MJoCnirrECVo-lvg7dS%2Fimage.png" alt="img" style="zoom:67%;" />
-
-从这个视图可以看出gdb要执行的下一条指令是什么，断点具体在什么位置。这里我只在一个CPU上运行QEMU（见最初的make参数），这样会使得gdb调试更加简单。因为现在只指定了一个CPU核，QEMU只会仿真一个核，我可以单步执行程序（因为在单核或者单线程场景下，单个断点就可以停止整个程序的运行）。通过在gdb中输入n，可以挑到下一条指令。这里调用了一个名为consoleinit的函数，它的工作与你想象的完全一样，也就是设置好console。一旦console设置好了，接下来可以向console打印输出（代码16、17行）。执行完16、17行之后，我们可以在QEMU看到相应的输出。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlxDELJZKUZ7wmW49T%2F-MJoEyhIx-LcbBXhSi_p%2Fimage.png" alt="img" style="zoom:67%;" />
-
-除了console之外，还有许多代码来做初始化。
+**许多代码来做初始化**（包括console）。
 
 ![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MJlxDELJZKUZ7wmW49T%2F-MJoIpUzQSmCleh6RUZF%2Fimage.png)
 
@@ -589,6 +530,15 @@ init会为用户空间设置好一些东西，比如配置好console，调用for
 
 https://blog.csdn.net/u013577996/article/details/109166463
 
+system call调用链路
+
+1. 在user/user.h做函数声明
+2. Makefile调用usys.pl（perl脚本）生成usys.S，里面写了具体实现，通过ecall进入kernel，通过设置寄存器a7的值，表明调用哪个system call
+3. ecall表示一种特殊的trap，转到kernel/syscall.c:syscall执行
+4. syscall.c中有个函数指针数组，即一个数组中存放了所有指向system call实现函数的指针，通过寄存器a7的值定位到某个函数指针，通过函数指针调用函数
+
+struct proc是进程的结构体
+
 ## Lec04 Page tables
 
 ### 4.1 地址空间(Address Space)
@@ -601,31 +551,15 @@ https://blog.csdn.net/u013577996/article/details/109166463
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKKjB2an4WcuUmOlE__%2F-MKNnmJ4XqAfHllLizrD%2Fimage.png" alt="img" style="zoom:50%;" />
 
-如果我们不做任何工作，默认情况下我们是没有内存隔离性的。在RISC-V主板上，内存是由一些DRAM芯片组成。在这些DRAM芯片中保存了程序的数据和代码。例如内存中的某一个部分是内核，包括了文本，数据，栈等等；如果运行了Shell，内存中的某个部分就是Shell；如果运行了cat程序，内存中的某个部分是cat程序。这里说的都是物理内存，它的地址从0开始到某个大的地址结束。结束地址取决于我们的机器现在究竟有多少物理内存。所有程序都必须存在于物理内存中，否则处理器甚至都不能处理程序的指令。
+一种实现方式是**地址空间**（Address Spaces）。**我们给包括内核在内的所有程序专属的地址空间。所以，当我们运行cat时，它的地址空间从0到某个地址结束。当我们运行Shell时，它的地址也从0开始到某个地址结束。内核的地址空间也从0开始到某个地址结束。**
 
-这里的风险很明显。我们简单化一下场景，假设Shell存在于内存地址1000-2000之间。
-
-如果cat出现了程序错误，将内存地址1000，也就是Shell的起始地址加载到寄存器a0中。之后执行*sd $7, (a0)*，这里等效于将7写入内存地址1000。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKKjB2an4WcuUmOlE__%2F-MKNz-f6MsF7yVvGAW0X%2Fimage.png" alt="img" style="zoom:50%;" />
-
-现在cat程序弄乱了Shell程序的内存镜像，所以隔离性被破坏了，这是我们不想看到的现象。所以，我们想要某种机制，能够将不同程序之间的内存隔离开来，这样类似的事情就不会发生。一种实现方式是**地址空间**（Address Spaces）。**我们给包括内核在内的所有程序专属的地址空间。所以，当我们运行cat时，它的地址空间从0到某个地址结束。当我们运行Shell时，它的地址也从0开始到某个地址结束。内核的地址空间也从0开始到某个地址结束。**
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKKjB2an4WcuUmOlE__%2F-MKO-tmkrzI0URCtzr3X%2Fimage.png" alt="img" style="zoom:50%;" />
-
-如果cat程序想要向地址1000写入数据，那么cat只会向它自己的地址1000，而不是Shell的地址1000写入数据。所以，基本上来说，每个程序都运行在自己的地址空间，并且这些地址空间彼此之间相互独立。在这种不同地址空间的概念中，cat程序甚至都不具备引用属于Shell的内存地址的能力。这是我们想要达成的终极目标，因为这种方式为我们提供了强隔离性，cat现在不能引用任何不属于自己的内存。
-
-所以现在我们的问题是如何在一个物理内存上，创建不同的地址空间，因为归根到底，我们使用的还是一堆存放了内存信息的DRAM芯片。
-
-kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，那么kalloc会返回一个空指针，内核会妥善处理并将结果返回给用户应用程序。并告诉用户应用程序，要么是对这个应用程序没有额外的内存了，要么是整个机器都没有内存了。内核的一部分工作就是优雅的处理这些情况，这里的优雅是指向用户应用程序返回一个错误消息，而不是直接崩溃。
+kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，那么kalloc会返回一个空指针，内核会妥善处理并将结果返回给用户应用程序。并告诉用户应用程序，要么是对这个应用程序没有额外的内存了，要么是整个机器都没有内存了。
 
 ### 4.2 页表(Page Table)
 
-我们如何能够实现地址空间呢？或者说如何在一个物理内存上，创建不同的地址空间？
+**页表是在硬件中通过处理器和内存管理单元（Memory Management Unit）实现。对于任何一条带有地址的指令，其中的地址应该认为是虚拟内存地址而不是物理地址**。
 
-最常见的方法，同时也是非常灵活的一种方法就是使用页表（Page Tables）。**页表是在硬件中通过处理器和内存管理单元（Memory Management Unit）实现**。**对于任何一条带有地址的指令，其中的地址应该认为是虚拟内存地址而不是物理地址**。假设寄存器a0中是地址0x1000，那么这是一个虚拟内存地址。虚拟内存地址会被转到内存管理单元（MMU，Memory Management Unit），内存管理单元会将虚拟地址翻译成物理地址。之后这个物理地址会被用来索引物理内存，并从物理内存加载，或者向物理内存存储数据。
-
-从CPU的角度来说，一旦MMU打开了，它执行的每条指令中的地址都是虚拟内存地址。为了能够完成虚拟内存地址到物理内存地址的翻译，MMU会有一个表单，表单中，一边是虚拟内存地址，另一边是物理内存地址。这样的表单可以非常灵活。通常来说，内存地址对应关系的表单也保存在内存中。**所以CPU中需要有一些寄存器用来存放表单在物理内存中的地址**。现在，在内存的某个位置保存了地址关系表单，我们假设这个位置的物理内存地址是0x10。**那么在RISC-V上一个叫做SATP的寄存器会保存地址0x10**。
+从CPU的角度来说，一旦MMU打开了，它执行的每条指令中的地址都是虚拟内存地址。为了能够完成虚拟内存地址到物理内存地址的翻译，MMU会有一个表单，表单中，一边是虚拟内存地址，另一边是物理内存地址。所以CPU中需要有一些寄存器用来存放表单在物理内存中的地址**。现在，在内存的某个位置保存了地址关系表单，我们假设这个位置的物理内存地址是0x10。**那么在RISC-V上一个叫做SATP的寄存器会保存地址0x10。
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKKjB2an4WcuUmOlE__%2F-MKONgZr-r8W5uRpknWQ%2Fimage.png" alt="img" style="zoom:50%;" />
 
@@ -633,24 +567,16 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 
 每个应用程序都有自己独立的表单，并且这个表单定义了应用程序的地址空间。**所以当操作系统将CPU从一个应用程序切换到另一个应用程序时，同时也需要切换SATP寄存器中的内容（内核负责修改），从而指向新的进程保存在物理内存中的地址对应表单。**
 
-如果我们以地址为粒度来管理，表单会变得非常巨大。实际上，所有的内存都会被这里的表单耗尽，所以这一点也不合理。所以，实际情况不可能是一个虚拟内存地址对应page table中的一个条目。
-
 1. 不要为每个地址创建一条表单条目，而是为每个page创建一条表单条目，所以每一次地址翻译都是针对一个page。而RISC-V中，一个page是4KB，也就是4096Bytes。这个大小非常常见，几乎所有的处理器都使用4KB大小的page或者支持4KB大小的page。
 
-2. 内存地址的翻译方式略微的不同了。首先对于虚拟内存地址，我们将它划分为两个部分，index和offset，index用来查找page，offset对应的是一个page中的哪个字节。当MMU在做地址翻译的时候，通过读取虚拟内存地址中的index可以知道物理内存中的page号，这个page号对应了物理内存中的4096个字节。之后虚拟内存地址中的offset指向了page中的4096个字节中的某一个，假设offset是12，那么page中的第12个字节被使用了。将offset加上page的起始地址，就可以得到物理内存地址。
+2. 内存地址的翻译方式略微的不同了。首先对于虚拟内存地址，我们将它划分为两个部分，index和offset，index用来查找page，offset对应的是一个page中的哪个字节。
 
-有关RISC-V的一件有意思的事情是，实际上，在我们使用的RSIC-V处理器上，并不是所有的64bit都被使用了，高25bit并没有被使用。这样的结果是限制了虚拟内存地址的数量，虚拟内存地址的数量现在只有2^39个，大概是512GB。当然，如果必要的话，最新的处理器或许可以支持更大的地址空间，只需要将未使用的25bit拿出来做为虚拟内存地址的一部分即可。
+实际上，在我们使用的RSIC-V处理器上，并不是所有的64bit都被使用了，高25bit并没有被使用。这样的结果是限制了虚拟内存地址的数量，虚拟内存地址的数量现在只有2^39个，大概是512GB。当然，如果必要的话，最新的处理器或许可以支持更大的地址空间，只需要将未使用的25bit拿出来做为虚拟内存地址的一部分即可。
 
 在剩下的39bit中，有27bit被用来当做index，12bit被用来当做offset。offset必须是12bit，因为对应了一个page的4096个字节。
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKKjB2an4WcuUmOlE__%2F-MKOz__c9_i1WtdpcLuS%2Fimage.png" alt="img" style="zoom: 33%;" />
 
-这里有什么问题吗？这些的内容还挺重要的，你们需要掌握这的内容才能做出下一个page table lab。
-
-> Q：我想知道4096字节作为一个page，这在物理内存中是连续的吗？
->
-> A：是的，在物理内存中，这是连续的4096个字节。所以物理内存是以4096为粒度使用的。
->
 > Q：因为这是一个64bit的机器，为什么硬件设计人员本可以用64bit但是却用了56bit？
 >
 > A：选择56bit而不是64bit是因为在主板上只需要56根线。
@@ -671,19 +597,15 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKKjB2an4WcuUmOlE__%2F-MKPz0j4auRNBBPcdU0G%2Fimage.png" alt="img" style="zoom: 33%;" />
 
-**所以实际上，SATP寄存器会指向最高一级的page directory的物理内存地址，之后我们用虚拟内存中index的高9bit用来索引最高一级的page directory，这样我们就能得到一个PPN，也就是物理page号。这个PPN指向了中间级的page directory。**
-
-**当我们在使用中间级的page directory时，我们通过虚拟内存地址中的L1部分完成索引。接下来会走到最低级的page directory，我们通过虚拟内存地址中的L0部分完成索引。在最低级的page directory中，我们可以得到对应于虚拟内存地址的物理内存地址。**
-
 从某种程度上来说，与之前一种方案还是很相似的，除了实际的索引是由3步，而不是1步完成。**这种方式的主要优点是，如果地址空间中大部分地址都没有使用，你不必为每一个index准备一个条**目。举个例子，如果你的地址空间只使用了一个page，4096Bytes。
 
-**除此之外，你没有使用任何其他的地址。现在，你需要多少个page table entry，或者page table directory来映射这一个page？**
+除此之外，没有使用任何其他的地址。现在，需要多少个page table directory来映射这一个page？
 
 **在最高级，你需要一个page directory。在这个page directory中，你需要一个数字是0的PTE，指向中间级page directory。所以在中间级，你也需要一个page directory，里面也是一个数字0的PTE，指向最低级page directory。所以这里总共需要3个page directory（也就是3 * 512个条目）。**
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKKjB2an4WcuUmOlE__%2F-MKQ1rVeQD0Abge87Lxz%2Fimage.png" alt="img" style="zoom: 50%;" />
 
-**而在前一个方案中，虽然我们只使用了一个page，还是需要2^27个PTE。这个方案中，我们只需要3 * 512个PTE。**所需的空间大大减少了。这是实际上硬件采用这种层次化的3级page directory结构的主要原因。这里有什么问题吗？这部分还是很重要的。
+**而在前一个方案中，虽然我们只使用了一个page，还是需要2^27个PTE。这个方案中，我们只需要3 * 512个PTE。**所需的空间大大减少了。这是实际上硬件采用这种层次化的3级page directory结构的主要原因。
 
 如果你把44bit的PPN和10bit的Flags相加是54bit，也就是说还有10bit未被使用，这10bit被用来作为未来扩展。比如说某一天你有了一个新的RISC-V处理器，它的page table可能略有不同，或许有超过44bit的PPN。如果你看下面这张图，你可以看到，这里有10bit是作为保留字段存在的。
 
@@ -691,7 +613,7 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 
 接下来，让我们看看PTE中的Flag，因为它也很重要。每个PTE的低10bit是一堆标志位：
 
-1. 第一个标志位是Valid。如果Valid bit位为1，那么表明这是一条合法的PTE，你可以用它来做地址翻译。对于刚刚举得那个小例子（应用程序只用了1个page的例子），我们只使用了3个page directory，每个page directory中只有第0个PTE被使用了，所以只有第0个PTE的Valid bit位会被设置成1，其他的511个PTE的Valid bit为0。这个标志位告诉MMU，你不能使用这条PTE，因为这条PTE并不包含有用的信息。
+1. 第一个标志位是Valid。**如果Valid bit位为1，那么表明这是一条合法的PTE**，你可以用它来做地址翻译。对于刚刚举得那个小例子（应用程序只用了1个page的例子），我们只使用了3个page directory，每个page directory中只有第0个PTE被使用了，所以只有第0个PTE的Valid bit位会被设置成1，其他的511个PTE的Valid bit为0。这个标志位告诉MMU，你不能使用这条PTE，因为这条PTE并不包含有用的信息。
 2. 下两个标志位分别是Readable和Writable。表明你是否可以读/写这个page。
 3. Executable表明你可以从这个page执行指令。
 4. User表明这个page可以被运行在用户空间的进程访问。
@@ -717,7 +639,7 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 >
 > A：非常好的问题。这里有几个原因，首先XV6中的walk函数设置了最初的page table，它需要对3级page table进行编程所以它首先需要能模拟3级page table。另一个原因或许你们已经在syscall实验中遇到了，在XV6中，内核有它自己的page table，用户进程也有自己的page table，用户进程指向sys_info结构体的指针存在于用户空间的page table，但是内核需要将这个指针翻译成一个自己可以读写的物理地址。如果你查看copy_in，copy_out，你可以发现内核会通过用户进程的page table，将用户的虚拟地址翻译得到物理地址，这样内核可以读写相应的物理内存地址。这就是为什么在XV6中需要有walk函数的一些原因。
 
-因为操作系统对于这里的地址翻译有完全的控制，它可以实现各种各样的功能。比如，当一个PTE是无效的，硬件会返回一个page fault，对于这个page fault，操作系统可以更新 page table并再次尝试指令。
+因为操作系统对于这里的地址翻译有完全的控制，它可以实现各种各样的功能。比如，**当一个PTE是无效的，硬件会返回一个page fault，对于这个page fault，操作系统可以更新 page table并再次尝试指令。**
 
 ### 4.4 Kernel Page Table
 
@@ -727,15 +649,7 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 
 图中的右半部分的结构完全由硬件设计者决定。当操作系统启动时，会从地址0x80000000开始运行，这个地址其实也是由硬件设计者决定的。
 
-中间是RISC-V处理器，我们现在知道了处理器中有4个核，每个核都有自己的MMU和TLB。处理器旁边就是DRAM芯片。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MK_UbCc81Y4Idzn55t8%2F-MKaZik5ig19xs1OK5WX%2Fimage.png" alt="img" style="zoom:33%;" />
-
-主板的设计人员决定了，在完成了虚拟到物理地址的翻译之后，如果得到的物理地址大于0x80000000会走向DRAM芯片，如果得到的物理地址低于0x80000000会走向不同的I/O设备。这是由这个主板的设计人员决定的物理结构。如果你想要查看这里的物理结构，你可以阅读主板的手册，手册中会一一介绍物理地址对应关系。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MK_UbCc81Y4Idzn55t8%2F-MKaa841bcyITdSeXgSv%2Fimage.png" alt="img" style="zoom: 50%;" />
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MK_UbCc81Y4Idzn55t8%2F-MKaaGcY8o95G9RhrbP9%2Fimage.png" alt="img" style="zoom:50%;" />
+主板的设计人员决定了，在完成了虚拟到物理地址的翻译之后，如果得到的物理地址大于0x80000000会走向DRAM芯片，如果得到的物理地址低于0x80000000会走向不同的I/O设备。
 
 首先，地址0是保留的，地址0x10090000对应以太网，地址0x80000000对应DDR内存，处理器外的易失存储（Off-Chip Volatile Memory），也就是主板上的DRAM芯片。地址0x1000是boot ROM的物理地址，当你对主板上电，主板做的第一件事情就是运行存储在boot ROM中的代码，当boot完成之后，会跳转到地址0x80000000，操作系统需要确保那个地址有一些数据能够接着启动操作系统。
 
@@ -760,7 +674,7 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 
 ![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MK_UbCc81Y4Idzn55t8%2F-MKbZEkzbzbKYgRRedXU%2Fimage.png)
 
-这是众多你可以通过page table实现的有意思的事情之一。你可以向同一个物理地址映射两个虚拟地址，你可以不将一个虚拟地址映射到物理地址。可以是一对一的映射，一对多映射，多对一映射。XV6至少在1-2个地方用到类似的技巧。这的kernel stack和Guard page就是XV6基于page table使用的有趣技巧的一个例子。
+你可以向同一个物理地址映射两个虚拟地址，你可以不将一个虚拟地址映射到物理地址。可以是一对一的映射，一对多映射，多对一映射。XV6至少在1-2个地方用到类似的技巧。
 
 第二件事情是权限。例如Kernel text page被标位R-X，意味着你可以读它，也可以在这个地址段执行指令，但是你不能向Kernel text写数据。通过设置权限我们可以尽早的发现Bug从而避免Bug。对于Kernel data需要能被写入，所以它的标志位是RW-，但是你不能在这个地址段运行指令，所以它的X标志位未被设置。（注，所以，kernel text用来存代码，代码可以读，可以运行，但是不能篡改，kernel data用来存数据，数据可以读写，但是不能通过数据伪装代码在kernel中运行）
 
@@ -778,21 +692,14 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 
 > XV6使用这段free memory来存放用户进程的page table，text和data。如果我们运行了非常多的用户进程，某个时间点我们会耗尽这段内存，这个时候fork或者exec会返回错误。
 >
-> Q：但是我们不能将所有的MAXVA地址都使用吧？
->
-> A：是的我们不能，这样我们会耗尽内存。大多数的进程使用的内存都远远小于虚拟地址空间。
 
 ### 4.5 kvminit函数
 
-接下来，让我们看一看代码，我认为很多东西都会因此变得更加清晰。
-
-首先，我们来做一个的常规操作，启动我们的XV6，这里QEMU实现了主板，同时我们打开gdb。
-
-上一次我们看了boot的流程，我们跟到了main函数。**main函数中调用的一个函数是kvminit，这个函数会设置好kernel的地址空间**。kvminit的代码如下图所示：
+**main函数中调用的一个函数是kvminit，这个函数会设置好kernel的地址空间**。kvminit的代码如下图所示：
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKgiYv2CppKnuZEsKO3%2F-MKjcMW3TzZ3kdPwse0X%2Fimage.png" alt="img" style="zoom: 80%;" />
 
-我们在前一部分看了kernel的地址空间长成什么样，这里我们来看一下代码是如何将它设置好的。首先在kvminit中设置一个断点，之后运行代码到断点位置。在gdb中执行layout split，可以看到（从上面的代码也可以看出）**函数的第一步是为最高一级page directory分配物理page**（注，调用kalloc就是分配物理page）。下一行将这段内存初始化为0。
+可以看到（从上面的代码也可以看出）**函数的第一步是为最高一级page directory分配物理page**（注，调用kalloc就是分配物理page）。下一行将这段内存初始化为0。
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKgiYv2CppKnuZEsKO3%2F-MKjPnUXQpkVeqUpxKel%2Fimage.png" alt="img" style="zoom: 80%;" />
 
@@ -806,22 +713,6 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 
 所以，**通过kvmmap可以将物理地址映射到相同的虚拟地址**（注，因为kvmmap的前两个参数一致）。
 
-在page table实验中，第一个练习是实现vmprint，这个函数会打印当前的kernel page table。我们现在跳过这个函数，看一下执行完第一个kvmmap时的kernel page table。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKgiYv2CppKnuZEsKO3%2F-MKjW0riMeQYsQz76yZu%2Fimage.png" alt="img" style="zoom: 80%;" />
-
-我们来看一下这里的输出。第一行是最高一级page directory的地址，这就是存在SATP或者将会存在SATP中的地址。第二行可以看到最高一级page directory只有一条PTE序号为0，它包含了中间级page directory的物理地址。第三行可以看到中间级的page directory只有一条PTE序号为128，它指向了最低级page directory的物理地址。第四行可以看到最低级的page directory包含了PTE指向物理地址。你们可以看到最低一级 page directory中PTE的物理地址就是0x10000000，对应了UART0。
-
-前面是物理地址，我们可以从虚拟地址的角度来验证这里符合预期。我们将地址0x10000000向右移位12bit，这样可以得到虚拟地址的高27bit（index部分）。之后我们再对这部分右移位9bit，并打印成10进制数，可以得到128，这就是中间级page directory中PTE的序号。这与之前（4.4）介绍的内容是符合的。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKoqX3juAGIEtw1zvSN%2F-MKwkdhVQHoP9SPCHfEW%2Fimage.png" alt="img" style="zoom:67%;" />
-
-从标志位来看（fl部分），最低一级page directory中的PTE有读写标志位，并且Valid标志位也设置了（4.3底部有标志位的介绍）。
-
-内核会持续的按照这种方式，调用kvmmap来设置地址空间。之后会对VIRTIO0、CLINT、PLIC、kernel text、kernel data、最后是TRAMPOLINE进行地址映射。最后我们还会调用vmprint打印完整的kernel page directory，可以看出已经设置了很多PTE。
-
-<img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKgiYv2CppKnuZEsKO3%2F-MKjdk9613l99xINOywP%2Fimage.png" alt="img" style="zoom:67%;" />
-
 ### 4.6 kvminithart函数
 
 之后，kvminit函数返回了，在main函数中，我们运行到了kvminithart函数。
@@ -832,15 +723,11 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 
 在这条指令之前，还不存在可用的page table，所以也就不存在地址翻译。执行完这条指令之后，程序计数器（Program Counter）增加了4。而之后的下一条指令被执行时，程序计数器会被内存中的page table翻译。
 
-所以这条指令的执行时刻是一个非常重要的时刻。因为整个地址翻译从这条指令之后开始生效，之后的每一个使用的内存地址都可能对应到与之不同的物理内存地址。因为在这条指令之前，我们使用的都是物理内存地址，这条指令之后page table开始生效，所有的内存地址都变成了另一个含义，也就是虚拟内存地址。
-
 这里能正常工作的原因是值得注意的。因为**前一条指令还是在物理内存中，而后一条指令已经在虚拟内存中了**。比如，下一条指令地址是0x80001110就是一个虚拟内存地址。
 
 <img src="MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MKlmAaMCuundOeRCH3F%2F-MKlq_20wJR-qcEYSVzE%2Fimage.png" alt="img" style="zoom: 80%;" />
 
 为什么这里能正常工作呢？因为**kernel page的映射关系中，虚拟地址到物理地址是完全相等的**。所以，在我们打开虚拟地址翻译硬件之后，地址翻译硬件会将一个虚拟地址翻译到相同的物理地址。所以实际上，我们最终还是能通过内存地址执行到正确的指令，因为经过地址翻译0x80001110还是对应0x80001110。
-
-管理虚拟内存的一个难点是，一旦执行了类似于SATP这样的指令，你相当于将一个page table加载到了SATP寄存器，你的世界完全改变了。现在每一个地址都会被你设置好的page table所翻译。那么假设你的page table设置错误了，因为page table没有设置好，虚拟地址可能根本就翻译不了，那么内核会停止运行并panic。
 
 ### 4.7 walk函数
 

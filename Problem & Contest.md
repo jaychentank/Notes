@@ -340,55 +340,18 @@ fort(l, 1, n) {
 cout << dp[0][n - 1] << endl;
 ~~~
 
-#### M - Candies
-
-~~~C++
-//TLE做法
-f[0] = 1;//f[i]是i个蛋糕分配得方案数
-forn(i, n) {
-    int a; cin >> a;
-	for (int j = m; j >= 0; j--)
-	{
-		fort (k, 1, a)
-		{
-			if (j >= k)f[j] += f[j - k];
-		}
-	}
-}
-cout << f[m] << endl;
-~~~
-
-~~~C++
-//优化做法 通过数组s来记录前缀和
-vll f(k + 1), sum(k + 1); f[0] = 1;
-forn(i, n) {
-	int a; cin >> a;
-	sum[0] = f[0];
-	fort(j, 1, k + 1) sum[j] = (sum[j - 1] + f[j]) % MOD;
-	forn(j, k + 1) {
-		f[j] = sum[j];
-		if (j > a) f[j] = (f[j] + MOD - sum[j - a - 1]) % MOD;
-	}
-}
-cout << f[k] << endl;
-~~~
-
 #### O - matching(状压dp)
 
 ~~~C++
 vl dp(1 << n);
-forn(i, n){
+forn(i, n) {
     forn(j, n) cin >> a[i][j];
 }
 dp[0] = 1;
-forn(i, n)
-{
-    forn(j, 1 << n)//dp[j]为前i个男人匹配了j个女人的方案数
-    {
-        if (__builtin_popcount(j) != i)
-            continue;
-        forn(xx, n)
-        {
+forn(i, n) {
+    forn(j, 1 << n) {//dp[j]为前i个男人匹配了j个女人的方案数
+        if (__builtin_popcount(j) != i) continue;
+        forn(xx, n) {
             if (a[i][xx] && !((j >> xx) & 1))
                 dp[j + (1 << xx)] = (dp[j + (1 << xx)] + dp[j]) % mod;
         }
@@ -399,7 +362,7 @@ cout << dp.back() << endl;
 
 #### Q - Flowers
 
-建立数组dp，dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在lognlogn的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
+dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在lognlogn的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
 
 ~~~C++
 //用树状数组修改和维护区间最大值
@@ -476,7 +439,7 @@ fort(k, 1, 1 << n) {
 }
 ~~~
 
-V - Subtree
+#### V - Subtree
 
 ![image-20220906193909696](Problem & Contest.assets/image-20220906193909696.png)
 
@@ -493,13 +456,13 @@ function<void(int, int)> dfs1 = [&](int u, int p) {
     suf[u] = vi(G[u].size(), 1);
     fort(i, 1, G[u].size()) {
         pre[u][i] = pre[u][i - 1];
-        if (G[u][i - 1] ^ p) {
+        if (G[u][i - 1] != p) {
             pre[u][i] = ((ll)pre[u][i] * (f[G[u][i - 1]] + 1)) % m;
         }
     }
     rfort(i, G[u].size() - 2, 0) {
         suf[u][i] = suf[u][i + 1];
-        if (G[u][i + 1] ^ p) {
+        if (G[u][i + 1] != p) {
             suf[u][i] = ((ll)suf[u][i] * (f[G[u][i + 1]] + 1)) % m;
         }
     }
