@@ -752,3 +752,35 @@ kalloc保存了空余page的列表，如果这个列表为空或者耗尽了，�
 ### lab3 Page tables
 
 https://blog.csdn.net/u013577996/article/details/109582932
+
+## Lec05 Calling conventions and stack frames RISC-V
+
+### 5.1 C程序到汇编程序的转换
+
+通常来说，我们的C语言程序会有一个main函数，假设在这个函数内你执行了一些打印然后退出了。
+
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MLx7CfaUsd9tWT_xTHR%2F-MLz8XNzUZnYmk6MryBE%2Fimage.png)
+
+处理器能够理解的是二进制编码之后的汇编代码。当我们说到一个RISC-V处理器时，意味着这个处理器能够理解RISC-V的指令集。**任何一个处理器都有一个关联的ISA（Instruction Sets Architecture），ISA就是处理器能够理解的指令集**。每一条指令都有一个对应的二进制编码或者一个Opcode。**当处理器在运行时，如果看见了这些编码，那么处理器就知道该做什么样的操作。**
+
+之后汇编语言会被翻译成二进制文件也就是.obj或者.o文件。.o文件就是处理器能够理解的文件
+
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MLx7CfaUsd9tWT_xTHR%2F-MLzHadiOcRt3WrEzrOS%2Fimage.png)
+
+汇编语言不具备C语言的组织结构，在汇编语言中你只能看到一行行的指令，比如add，mult等等。汇编语言中没有很好的控制流程，没有循环（注，但是有基于lable的跳转），虽然有函数但是与你们知道的C语言函数不太一样，汇编语言中的函数是以label的形式存在而不是真正的函数定义。汇编语言是一门非常底层的语言，许多其他语言，比如C++，都会编译成汇编语言。运行任何编译型语言之前都需要先生成汇编语言。
+
+### 5.2 RISC-V vs x86
+
+汇编语言有很多种（注，因为不同的处理器指令集不一样，而汇编语言中都是一条条指令，所以不同处理器对应的汇编语言必然不一样）。如果你使用RISC-V，你不太能将Linux运行在上面。相应的，大多数现代计算机都运行在x86和x86-64处理器上。x86拥有一套不同的指令集，看起来与RISC-V非常相似。
+
+![img](MIT 6.S081.assets/assets%2F-MHZoT2b_bcLghjAOPsJ%2F-MLx7CfaUsd9tWT_xTHR%2F-MLzNWFVE_W7LLDZjKfM%2Fimage.png)
+
+RISC-V中的RISC是**精简指令集**（Reduced Instruction Set Computer）的意思，而x86通常被称为CISC，复杂指令集（Complex Instruction Set Computer）。这两者之间有一些关键的区别：
+
+1. 首先是指令的数量。实际上，创造RISC-V的一个非常大的初衷就是因为Intel手册中指令数量太多了。
+2. 除此之外，RISC-V指令也更加简单。在x86-64中，很多指令都做了不止一件事情。这些指令中的每一条都执行了一系列复杂的操作并返回结果。但是RISC-V不会这样做，RISC-V的指令趋向于完成更简单的工作，相应的也消耗更少的CPU执行时间。
+3. 相比x86来说，RISC是市场上唯一的一款开源指令集，这意味着任何人都可以为RISC-V开发主板。
+
+在你们的日常生活中，你们可能已经在完全不知情的情况下使用了精简指令集。比如说ARM也是一个精简指令集，高通的Snapdragon处理器就是基于ARM。如果你使用一个Android手机，那么大概率你的手机运行在精简指令集上。如果你使用IOS，苹果公司也实现某种版本的ARM处理器，这些处理器运行在iPad，iPhone和大多数苹果移动设备上，甚至对于Mac，苹果公司也在尝试向ARM做迁移（注，刚刚发布的Macbook）。所以精简指令集出现在各种各样的地方。如果你想在现实世界中找到RISC-V处理器，你可以在一些嵌入式设备中找到。所以RISC-V也是有应用的，当然它可能没有x86那么流行。
+
+由于Intel的指令集是在是太大了，精简指令集的使用越来越多。Intel的指令集之所以这么大，是因为**Intel对于向后兼容非常看重**。所以一个现代的Intel处理器还可以运行30/40年前的指令。
