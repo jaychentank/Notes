@@ -155,13 +155,13 @@ private:
 
 ### kick start 2021
 
-**Round D**
+#### Round D
 
 对于区间计数问题可以使用差分。
 
 ### kick start 2019
 
-**Round A**
+#### Round A
 
 将一个矩阵A中某些点及离该点曼哈顿距离为lim的所有点统一映射到另一个矩阵B中（其中矩阵A大小为n*n，则映射后的矩阵B大小为4n\*4n）
 点(x,y)及离该点曼哈顿距离为lim的所有点映射到矩阵B的区域为左上角点**(lnx,lny)-**>右下角点**(rnx,rny)**。
@@ -182,22 +182,22 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
 
 这是通过更换坐标系，将矩阵A中的(x,y)映射为矩阵B中的(x+y,x-y+m)
 
-**Round D**
+#### Round D
 
 1. 两个数字异或以后的数位奇偶性满足只有在奇加偶的情况下才等于奇。
 2. 就是多个数字**&  |  ^**，计算的先后顺序不影响最后结果
 
-**Round F**
+#### Round F
 
 用一些杂乱无章的点中的部分点构成一个多边形来困住某个点，则一定可以用三角形和四边形来困住。通过判断一个点是否在多边形内可以用叉乘。
 
-**Round H**
+#### Round H
 
 ![image-20220818224836143](Problem & Contest.assets/image-20220818224836143.png)
 
 ### kick start 2018
 
-**Round B**
+#### Round B
 
 能被9整除的数各个位上的数字加起来是9的倍数
 每十个数中一定会有一个数被9整除并且还有一个数字含有9（除了边界情况）
@@ -209,7 +209,7 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
 考虑更一般的情况，区间1-num：
 则有Σnum[i] * 8 * 9^(num.size()-2-i)，当i=num.size()-1时，需要逐个判断，复杂度为O(logn)
 
-**Round C**
+#### Round C
 
 1. **problem B** 
 
@@ -219,21 +219,25 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
 
 ![image-20220806163944938](Problem & Contest.assets/image-20220806163944938.png)
 
-**Round D**
+#### Round D
 
 ![image-20220809193251988](Problem & Contest.assets/image-20220809193251988.png)
 
 此题的核心在于坐标的变化
 
-**Round H**
+#### Round H
 
 ![image-20220820163908699](Problem & Contest.assets/image-20220820163908699.png)
 
 ### kick start 2017
 
-**Round A**
+#### Round A
 
-一个\*可以匹配0-4个字符，可以将一个\*转化为4个\*，这样就可以正常转换了。
+1. problem A
+
+   ![image-20220915191919437](Problem & Contest.assets/image-20220915191919437.png)
+
+2. problem B：一个\*可以匹配0-4个字符，可以将一个\*转化为4个\*，这样就可以正常转换了。
 
 ## Atcoder
 

@@ -554,6 +554,8 @@ for(int i=0;i<n;i++)//核心代码
 
 ![image-20220910232258900](Struct & algorithm.assets/image-20220910232258900.png)
 
+ **C(n，0)+C(n，1)+C(n，2)+...+C(n，n)=(1+1)ⁿ=2ⁿ**
+
 #### 容斥原理基础
 
 ![image-20220907235145927](Struct & algorithm.assets/image-20220907235145927.png)
