@@ -71,13 +71,35 @@ private:
 };
 ~~~
 
-**761.特殊的二进制序列**
+#### 6186. 按位或最大的最小子数组长度
 
-由于题目定义特殊的二进制序列为，0和1数量相等且每一个前缀码中 1 的数量要大于等于 0 的数量，因此可以将1映射为(，0映射为)
+这类通用模板可以做到
 
-**782.变为棋盘**
+1. 求出**所有**子数组的按位或的结果，以及值等于该结果的子数组的个数。
+2. 求按位或结果等于**任意给定数字**的子数组的最短长度/最长长度。
 
-对于这类问题应该先考虑什么样的棋盘可以变为题目要求的棋盘
+~~~C++
+vector<int> smallestSubarrays(vector<int> &nums) {
+    int n = nums.size();
+    vector<int> ans(n);
+    vector<pair<int, int>> ors; // 按位或的值 + 对应子数组的右端点的最小值
+    for (int i = n - 1; i >= 0; --i) {
+        ors.emplace_back(0, i);
+        ors[0].first |= nums[i];
+        int k = 0;
+        for (int j = 1; j < ors.size(); ++j) {
+            ors[j].first |= nums[i];
+            if (ors[k].first == ors[j].first)
+                ors[k].second = ors[j].second; // 合并相同值，下标取最小的
+            else ors[++k] = ors[j];
+        }
+        ors.resize(k + 1);
+        // 本题只用到了 ors[0]，如果题目改成任意给定数值，可以在 ors 中查找
+        ans[i] = ors[0].second - i + 1;
+    }
+    return ans;
+}
+~~~
 
 ## Codeforces
 
@@ -89,8 +111,7 @@ private:
 
    ~~~C++
    int ans = 0;
-   for (int i = 1; i <= n; ++i)
-   {
+   for (int i = 1; i <= n; ++i){
        ans += (a[i] != a[i + 1]) * (n - (i + 1) + 1) * i;
    }
    while (m--)
@@ -102,10 +123,10 @@ private:
        a[i] = x;
        ans += (a[i] != a[i - 1]) * (n - i + 1) * (i - 1);
        ans += (a[i + 1] != a[i]) * (n - (i + 1) + 1) * i;
-       cout << ans + n * (n + 1) / 2 << '\n';
+       cout << ans + n * (n + 1) / 2 << ;
    }
    ~~~
-
+   
 3. **808 Div.2**
 
    **D. Difference Array**
@@ -238,6 +259,16 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
    ![image-20220915191919437](Problem & Contest.assets/image-20220915191919437.png)
 
 2. problem B：一个\*可以匹配0-4个字符，可以将一个\*转化为4个\*，这样就可以正常转换了。
+
+#### Round B
+
+![image-20220915204113132](Problem & Contest.assets/image-20220915204113132.png)
+
+如何找到最佳的选点？某个点的权值+前面所有点的权值>=后面所有点的权值 && 某个点的权值+后面所有点的权值>=前面所有点的权值
+
+![image-20220915204640193](Problem & Contest.assets/image-20220915204640193.png)
+
+
 
 ## Atcoder
 

@@ -1,4 +1,4 @@
-#  C++
+#   C++
 
 ```c++
 int __builtin_ffs(unsigned int x)
@@ -20,7 +20,7 @@ int __builtin_parity (unsigned int x)
 //isdigit(c)检查字符c是否是数字
 //isspace(c)检查字符c是否是空格
 //to_string()数值转为string
-//stoi()string转为int  stoll转成long long类型
+//stoi() string转为int  stoll()转成long long类型
 //static_cast<double>
 //next_permutation用于得到下一个排列，主要是暴力情况
 //iota 递增序列填充
@@ -64,6 +64,10 @@ b=(b^(b&(-b));
 b=b&(b-1);//将最低位的1从b中去除
 ~~~
 
+~~~C++
+///2是向0取整，正数向下负数向上，>>是向下取整
+~~~
+
 # 知识树
 
 ## 排序
@@ -76,10 +80,9 @@ b=b&(b-1);//将最低位的1从b中去除
 
 ~~~C++
 void shell_sort(vi& arr,int n){
-    for(int step = n/2; step > 0;step /= 2)/*增量步长*/
-    {
+    for(int step = n/2; step > 0;step /= 2) {//增量步长
         /*step = 4 2 1*/
-        fort(i, step, n){
+        fort(i, step, n) {
             int tmp = arr[i];
             int j = i - step;
             for(;j >= 0 && tmp < arr[j];){
@@ -123,65 +126,22 @@ void shell_sort(vi& arr,int n){
 2. 矩阵周长问题
 3. 多边形面积问题
 
-![image-20220902234613881](Struct & algorithm.assets/image-20220902234613881.png)
-
-**解决方案：**
-
-1. 通过区间离散化解决区间特别大的问题。
-2. 通过线段树维护区间信息。用cover表示区间\[l,r\]被覆盖的次数，用len表示区间的合法长度，用query(1,n)的合法长度，就能返回总共的区间长度了。
-
-建树
+![image-20220916113242567](Struct & algorithm.assets/image-20220916113242567.png)
 
 ~~~C++
-vi cover(maxn);//存放i节点对应覆盖情况的值
-vector<double> length(maxn);//存放区间i下的总长度
-vector<double> yy(maxn);//存放离散后的y值，下标用lowerbound进行查找
-~~~
-
-![image-20220903092835746](Struct & algorithm.assets/image-20220903092835746.png)
-
-这棵线段树的叶子节点的l,r不相等，差别为1。这是因为点对于求面积的题目毫无意义，我们最需要的是它每一个基础块。
-
-1. 第一条为入边，区间为[1,3]，则区间cover[1,3] +1(此时区间[1,3] = 1)
-
-2. query整个域的区间，得到len=10，则width[0]*10 = 50
-
-   ![image-20220903093141083](Struct & algorithm.assets/image-20220903093141083.png)
-
-3. 第二条边为入边，区间为[2,4]，则cover[2,4]+1
-
-4. query整个区间，得到len = 15.5，则width[1]*(25.5-10) = 77.5
-
-   (注意：这里只需要上推len，不需要下推cover至[2,3]和[3,4]，也不需要上推cover至[1,4]。这就是线段树的强大之处：**只要找到对应结点的区间能完全覆盖当前线段区间就可以回溯统计了，并不需要更新到叶子节点，这是线段树为什么效率高的原因**)
-
-   ![image-20220903093608071](Struct & algorithm.assets/image-20220903093608071.png)
-
-5. 第三条边为出边，区间从[1,3]，则[1,3]-1
-
-6. query整个区间，得到10.5，则width[2]*10.5 = 52.5
-
-   ![image-20220903093643623](Struct & algorithm.assets/image-20220903093643623.png)
-
-7. 第四条边为出边，区间从[15,25.5]，此时-1，整个区间没掉 8. query整个区间，值为0，遍历结束。
-
-~~~C++
-const int maxn = 2e4 + 5;
-vi cover(maxn);//存放i节点对应覆盖情况的值
-vector<double> length(maxn);//存放区间i下的总长度
-vector<double> yy;//存放离散后的y值，下标用lowerbound进行查找
 struct ScanLine {
-    double x;//边的x坐标
-    double upy, downy;//边的y坐标上，y坐标下
-    int inout;//入边为1，出边为-1
+    int x, upy, downy;
+    int inout;
     ScanLine() {}
-    ScanLine(double x, double y1, double y2, int io) :x(x), upy(y1), downy(y2), inout(io) {}
+    ScanLine(int x, int y1, int y2, int io) :x(x), downy(y1), upy(y2), inout(io) {}
+    bool operator<(ScanLine& j) {
+        return x < j.x;
+    }
 };
-bool cmp(ScanLine& a, ScanLine& b) {
-    return a.x < b.x;
-}
+vector<int> length, cover, ys;// cover存放i节点对应覆盖情况的值
 void pushup(int v, int l, int r) {
-    if (cover[v]) length[v] = yy[r] - yy[l];//某个点cover为正时这个点的长度
-    else if (l + 1 == r) length[v] = 0;//到了叶子节点
+    if (cover[v]) length[v] = ys[r] - ys[l];
+    else if (l + 1 == r) length[v] = 0;
     else length[v] = length[v << 1] + length[v << 1 | 1];
 }
 void update(int v, int l, int r, int L, int R, int io) {
@@ -193,33 +153,34 @@ void update(int v, int l, int r, int L, int R, int io) {
     }
     if (l + 1 == r) return;
     int mid = (l + r) >> 1;
-    if (L <= mid) update(v << 1, l, mid, L, R, io);
-    if (R > mid) update(v << 1 | 1, mid, r, L, R, io);
+    update(v << 1, l, mid, L, R, io);
+    update(v << 1 | 1, mid, r, L, R, io);
     pushup(v, l, r);
 }
-void solve() {
-    int n; cin >> n;
-    vector<ScanLine> line;
-    forn(i, n) {
-        double x1, y1, x2, y2; cin >> x1 >> y1 >> x2 >> y2;
-        line.push_back(ScanLine(x1, y2, y1, 1));
-        line.push_back(ScanLine(x2, y2, y1, -1));
-        yy.push_back(y1);
-        yy.push_back(y2);
+int rectangleArea(vector<vector<int>>& rectangles) {
+    vector<ScanLine> lines;
+    ys.clear();
+    for (auto& v : rectangles) {
+        lines.push_back({ v[0],v[1],v[3],1 });
+        lines.push_back({ v[2],v[1],v[3],-1 });
+        ys.push_back(v[1]); ys.push_back(v[3]);
     }
-    sort(all(yy)); sort(all(line), cmp);
-    yy.erase(unique(all(yy)), yy.end());
-    int len = yy.size(), cnt = line.size();
-    double ans = 0;
-    forn(i, cnt) {
-        if (i) ans += length[1] * (line[i].x - line[i - 1].x);
-        int yl = lower_bound(all(yy), line[i].downy) - yy.begin(), yr = lower_bound(all(yy), line[i].upy) - yy.begin();
-        int io = line[i].inout;
-        update(1, 0, len - 1, yl, yr, io);
+    sort(lines.begin(), lines.end());
+    sort(ys.begin(), ys.end());
+    ys.erase(unique(ys.begin(), ys.end()), ys.end());
+    int n = lines.size(), m = ys.size();;
+    length = vector<int>(m << 2); cover = vector<int>(m << 2);
+    int ans = 0;
+    for (int i = 0; i < n; i++) {
+        if (i > 0) ans += (lines[i].x - lines[i - 1].x) * length[1];
+        int yl = lower_bound(ys.begin(), ys.end(), lines[i].downy) - ys.begin(), yr = lower_bound(ys.begin(), ys.end(), lines[i].upy) - ys.begin(), io = lines[i].inout;
+        update(1, 0, m - 1, yl, yr, io);
     }
-    cout << ans << endl;
+    return ans;
 }
 ~~~
+
+### 自动状态机
 
 ## 几何
 
@@ -236,8 +197,7 @@ void solve() {
 判断一个四边形（**(x1,y1)->(x4,y4)为逆时针序**，分别为ABCD）是否是凸四边形
 
 ~~~C++
-bool gimp_transform_polygon_is_convex(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4)
-{
+bool gimp_transform_polygon_is_convex(double x1, double y1, double x2, double y2, double x3, double y3, double x4, double y4) {
     double z1, z2, z3, z4;
     z1 = ((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1));//AB X AC
     z2 = ((x3 - x1) * (y4 - y1) - (x4 - x1) * (y3 - y1));//AC X AD
@@ -274,7 +234,7 @@ double cross(Point a1, Point b1, Point a2, Point b2)
 }
 vector<Point> convex_hull(vector<Point> p, int n)    //求点集p的凸包，函数返回值为这个凸包的点集
 {
-    sort(p.begin(), p.end(), cmp_x);   //按所定的规则给点排序
+    sort(p.begin(), p.end(), cmp);   //按所定的规则给点排序
     int k=0;         //凸包中点的个数
     vector<Point> q(2*n);
     //求下侧链
@@ -302,13 +262,13 @@ vector<Point> convex_hull(vector<Point> p, int n)    //求点集p的凸包，函
 
 ### 数论
 
-~~~C++
-n*k=lcm(n,k)*gcd(n,k) //lcm是最小公倍数，gcd是最大公约数
-~~~
+1. n * k = lcm(n,k) * gcd(n,k) //lcm是最小公倍数，gcd是最大公约数
+2. 平方和公式：1^2+2^2+3^2+...+n^2 = n \* (n+1) \* (n+2)/6
 
-平方和公式：1^2+2^2+3^2+...+n^2=n\*(n+1)\*(n+2)/6
+3. 立方和公式：1^3+2^3+3^3+...+n^3 = n^2  * (n+1)^2 / 4
 
-立方和公式：1^3+2^3+3^3+...+n^3=n^2  * (n+1)^2 / 4
+4. n(1+1/2+1/3+⋯+1/n) = Θ(nlogn)
+5. 在一场长度为n的数组上[0,n - 1],初始你选择一个位置x，然后跳到(x + d)%n 的位置上，显然这个是有循环的，当且仅当gcd(n,d) = 1 的时候，循环长度为 n
 
 #### 计数质数
 
@@ -578,20 +538,6 @@ for(int i=0;i<n;i++)//核心代码
 ![image-20220907101309086](Struct & algorithm.assets/image-20220907101309086.png)
 
 ![image-20220907101328201](Struct & algorithm.assets/image-20220907101328201.png)
-
-~~~C++
-int prefix = 0, suffix = 0;
-int base = 31, mod = 1000000007, mul = 1;
-int happy = 0;
-for (int i = 1; i < n; ++i) {
-    prefix = ((long long)prefix * base + (s[i - 1] - 97)) % mod;
-    suffix = (suffix + (long long)(s[n - i] - 97) * mul) % mod;
-    if (prefix == suffix) {
-        happy = i;
-    }
-    mul = (long long)mul * base % mod;
-}
-~~~
 
 ### （0/1）字典树
 
@@ -933,25 +879,21 @@ t[x]节点覆盖的长度等于lowbit(x)
 
 ```C++
 //还可以维护和修改区间最大值
-auto lowbit=[&](int x){
-    return x&(-x);
-};
-auto update=[&](int m, int x) {
-    ++m;
-    while (m <= n) {
-        f[m] += x;
-        m += lowbit(m);
+void update(int i, int x, int n) {
+    while (i < n) {
+        f[i]++;
+        i += i & (-i);
     }
-};
-auto query=[&](int m) {
-    ++m;
-    int res = 0;
-    while (m > 0) {
-        res += f[m];
-        m -= lowbit(m);
+}
+ 
+int query(int i) {
+	int res = 0;
+    while(i){
+        res += f[i];
+        i -= i & (-i);
     }
-    return res;
-};
+	return res;
+}
 ```
 
 ![image-20220822222144713](Struct & algorithm.assets/image-20220822222144713.png)
@@ -1000,13 +942,11 @@ int query(int v, int l, int r, int L, int R) {
 #define val(x) tree[x].val
 #define mark(x) tree[x].mark
 const int MAXV = 8e6;
-struct node
-{
+struct node {
     ll val, mark;
     int ls, rs;
 } tree[MAXV];
-void push_down(int p, int len)
-{
+void push_down(int p, int len) {
     if (len <= 1) return;
     if (!ls(p)) ls(p) = ++cnt;
     if (!rs(p)) rs(p) = ++cnt;
@@ -1016,8 +956,7 @@ void push_down(int p, int len)
     mark(rs(p)) += mark(p);
     mark(p) = 0;
 }
-void update(int v, int l, int r, int L, int R，int d)
-{
+void update(int v, int l, int r, int L, int R，int d) {
     if (R<l || L>r) return;
     if (l >= L && r <= R) {
         val(p) += d * (r - l + 1);
@@ -1029,8 +968,7 @@ void update(int v, int l, int r, int L, int R，int d)
     update(rs(v), mid + 1, r, L, R, d);
     val(p) = val(ls(p)) + val(rs(p));
 }
-ll query(int v, int l, int r, int L, int R)
-{
+ll query(int v, int l, int r, int L, int R) {
     if (R<l || L>r) return 0;
     if (l >= L && r <= R) return val(v);
     push_down(v, r - l + 1);
@@ -1094,17 +1032,15 @@ int query(int v, int l, int r, int L, int R) {
 数组区间修改，单点查询：差分
 数组区间修改，区间查询：线段树
 
-### 并查集
+#### 并查集
 
 ~~~C++
 class dsu {
 public:
     int n;
     vector<int> p, size;
-    dsu(int _n) :n(_n) {
-        p = vector<int>(n);
+    dsu(int _n) :n(_n), p(n), size(n, 1) {
         iota(p.begin(), p.end(), 0);
-        size = vector<int>(n, 1);
     }
     int get(int x) {
         return x == p[x] ? p[x] : p[x] = get(p[x]);
@@ -1118,13 +1054,6 @@ public:
             return true;
         }
         return false;
-    }
-    void isolate(int x){
-        if(x != p[x]){
-            size[p[x]]--;
-            p[x]=x;
-            size[x]=1;
-        }
     }
 };
 ~~~
@@ -1301,8 +1230,6 @@ void dfs2(int u, int f)
         sz[u] = su, sz[v] = sv;
     }
 }
-dfs(0,-1);
-dfs2
 ~~~
 
 ### 计数dp
