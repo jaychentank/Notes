@@ -879,21 +879,26 @@ t[x]节点覆盖的长度等于lowbit(x)
 
 ```C++
 //还可以维护和修改区间最大值
-void update(int i, int x, int n) {
-    while (i < n) {
-        f[i]++;
-        i += i & (-i);
+class BIT {
+private:
+    vector<int> tree;
+public:
+    BIT(int n) : tree(n) {}
+    void add(int x) {
+        while (x < tree.size()) {
+            ++tree[x];
+            x += x & -x;
+        }
     }
-}
- 
-int query(int i) {
-	int res = 0;
-    while(i){
-        res += f[i];
-        i -= i & (-i);
+    int query(int x) {
+        int res = 0;
+        while (x > 0) {
+            res += tree[x];
+            x &= x - 1;
+        }
+        return res;
     }
-	return res;
-}
+};
 ```
 
 ![image-20220822222144713](Struct & algorithm.assets/image-20220822222144713.png)
@@ -937,43 +942,44 @@ int query(int v, int l, int r, int L, int R) {
 比起普通线段树，动态开点线段树有一个优势：**它能够处理零或负数位置。此时，求mid时不能用(l+r)/2，而要用(l+r-1)/2**
 
 ~~~C++
-#define ls(x) tree[x].ls
-#define rs(x) tree[x].rs
-#define val(x) tree[x].val
-#define mark(x) tree[x].mark
-const int MAXV = 8e6;
+#define ls(x) t[x].ls
+#define rs(x) t[x].rs
+#define val(x) t[x].val
+#define mark(x) t[x].mark
+const int MAXV = 1e7;
+int cnt = 1;
 struct node {
     ll val, mark;
     int ls, rs;
-} tree[MAXV];
-void push_down(int p, int len) {
-    if (len <= 1) return;
+} t[MAXV];
+void push_down(int p) {
     if (!ls(p)) ls(p) = ++cnt;
     if (!rs(p)) rs(p) = ++cnt;
-    val(ls(p)) += mark(p) * (len / 2);
+    val(ls(p)) += mark(p);
     mark(ls(p)) += mark(p);
-    val(rs(p)) += mark(p) * (len - len / 2);
+    val(rs(p)) += mark(p);
     mark(rs(p)) += mark(p);
     mark(p) = 0;
 }
-void update(int v, int l, int r, int L, int R，int d) {
+void update(int v, int l, int r, int L, int R, int d) {
     if (R<l || L>r) return;
     if (l >= L && r <= R) {
-        val(p) += d * (r - l + 1);
-        mark(p) += d
+        val(v) += d;
+        mark(v) += d;
+        return;
     }
-    push_down(v, r - c + 1);
-    int mid = (l + c - 1) / 2;
+    push_down(v);
+    int mid = (l + r - 1) / 2;
     update(ls(v), l, mid, L, R, d);
     update(rs(v), mid + 1, r, L, R, d);
-    val(p) = val(ls(p)) + val(rs(p));
+    val(v) = min(val(ls(v)), val(rs(v)));
 }
 ll query(int v, int l, int r, int L, int R) {
-    if (R<l || L>r) return 0;
+    if (R<l || L>r) return INT_MAX;
     if (l >= L && r <= R) return val(v);
-    push_down(v, r - l + 1);
+    push_down(v);
     int mid = (l + r - 1) / 2;
-    return query(ls(p), l, mid, L, R) + query(rs(p), mid + 1, r, L, R);
+    return min(query(ls(v), l, mid, L, R), query(rs(v), mid + 1, r, L, R));
 }
 ~~~
 
