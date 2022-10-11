@@ -146,3 +146,70 @@ Map函数会将输出存储到机器的本地磁盘，所以存储Map函数的�
 ![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDN6mwa8H8nyhZDCGAy%2F-MDPo5GjZT0JbipeZrJn%2Fimage.png?alt=media&token=3010b3b3-a19c-4e21-88b8-05dea250accc)
 
 我认为Google几年前就不再使用MapReduce了，不过在那之前，现代的MapReduce已经不再尝试在GFS数据存储的服务器上运行Map函数了，它乐意从任何地方加载数据，因为网络已经足够快了。
+
+##  论文阅读：*MapReduce*
+
+### 1.MapReduce
+
+MapReduce 是一个在多台机器上并行计算大规模数据的软件架构。主要通过两个操作来实现：Map 和 Reduce。
+
+![image-20221011115025359](MIT 6.824.assets/image-20221011115025359.png)
+
+**MapReduce的工作流：**
+
+1. 将输入文件分成 M 个小文件（每个文件的大小大概 16M-64M），**在集群中启动 MapReduce 实例，其中一个 Master 和多个 Worker**；
+2. 由 Master 分配任务，将 `Map` 任务分配给可用的 Worker；
+3. `Map` Worker 读取文件，执行用户自定义的 map 函数，输出 key/value 对，**缓存在内存中**；
+4. 内存中的 (key, value) 对通过 `partitioning function()` 例如 `hash(key) mod R` 分为 R 个 regions，然后写入磁盘。完成之后，把这些文件的地址回传给 Master，然后 Master 把这些位置传给 `Reduce` Worker；
+5. `Reduce` Worker 收到数据存储位置信息后，使用 RPC 从 `Map` Worker 所在的磁盘读取这些数据，根据 key 进行排序，并将同一 key 的所有数据分组聚合在一起；
+6. `Reduce` Worker 将分组后的值传给用户自定义的 reduce 函数，输出追加到所属分区的输出文件中；
+7. 当所有的 Map 任务和 Reduce 任务都完成后，Master 向用户程序返回结果；
+
+**实例**
+
+1. 词频统计)：这里 `Map` 函数可以将每个单词统计输出 `<word, count>`，然后 `Reduce` 函数同一单词的所有计数相加，得到：`<word, total count>`
+2. 分布式 Grep（一种强大的文本搜索工具，它能使用特定模式匹配（包括正则表达式）搜索文本，并默认输出匹配行）：`Map` 函数输出匹配某个模式的一行，`Reduce` 函数输出所有中间数据
+3. 分布式排序：`Map` 函数从每个记录提取 key，输出 `(key,record)` 对。`Reduce` 函数不改变任何的值，直接输出。后面我们会介绍**顺序保证**。
+
+### 2.容错性
+
+1. Worker 故障：Master 周期性的 ping 每个 Worker，如果指定时间内没回应就是挂了。将这个 Worker 标记为失效，分配给这个失效 Worker 的任务将被重新分配给其他 Worker，如果Master将Reduce任务分配给Worker，Worker完成Reduce任务后，即使该Worker节点失效了，Reduce任务也不用重新分配了，因为结果已经放在global file system上了；
+2. Master 故障：中止整个 MapReduce 运算，重新执行。**一般很少出现 Master 故障**。
+
+### 3.性能
+
+#### **网络带宽匮乏**
+
+在撰写该 paper 时，网络带宽是一个相当匮乏的资源。Master 在调度 Map 任务时会考虑输入文件的位置信息，尽量将一个 Map 任务调度在包含相关输入数据拷贝的机器上执行；如果找不到，Master 将尝试在保存输入数据拷贝的附近的机器上执行 Map 任务。
+
+需要注意的是，新的讲座视频提到，**随着后来 Google 的基础设施的扩展和升级，他们对这种存储位置优化的依赖程度降低了**。
+
+#### **“落伍者(Stragglers)”**
+
+影响 MapReduce 执行时间的另一个因素是“落伍者”：一台机器花了很长的时间才完成最后几个 Map 或 Reduce 任务(*例如：有台机器硬盘出了问题*)，导致总的 MapReduce 执行时间超过预期。
+
+通过备用任务(backup tasks)来处理：当 MapReduce 操作快完成的时候，Master 调度备用任务进程来执行剩下的、处于处理中的任务。无论是最初的进程还是备用任务进程任务完成了任务，都将该任务标记为已完成。
+
+### 4.其它有趣的特性
+
+#### **Combiner函数**
+
+在某些情况下，Map 函数产生的中间 key 值的重复数据会占很大的比重（例如词频统计，将产生成千上万的 `<the, 1>` 记录）。用户可以自定义一个可选的 `Combiner` 函数，`Combiner` 函数首先在本地将这些记录进行一次合并，然后将合并的结果再通过网络发送出去。
+
+**Combiner 函数的代码通常和 Reduce 函数的代码相同，启动这个功能的好处是可以减少通过网络发送到 Reduce 函数的数据量。** 
+
+**并不是所有的job都适用combiner**，只有操作满足结合律的才可设置combiner。combine操作类似于：opt(opt(1, 2, 3), opt(4, 5, 6))。如果opt为求和、求最大值的话，可以使用，但是如果是求中值的话，不适用。
+
+#### 跳过损坏的记录
+
+用户程序中的 bug 导致 `Map` 或者 `Reduce` 函数在处理某些记录的时候crash。通常会修复 bug 再执行 MapReduce，但是找出 bug 并修复它往往不是一件容易的事情（bug 有可能在第三方库）。
+
+与其因为少数坏记录而导致整个执行失败，不如有一个机制可以让损坏的记录被跳过。这在某些情况下是可以接受的，例如在对一个大型数据集进行统计分析时。
+
+Worker 可以记录处理的最后一条记录的序号发送给 Master，当 Master 看到在处理某条记录失败不止一次时，标记这条记录需要被跳过，下次执行时跳过这条记录。
+
+#### **顺序保证**
+
+确保在给定的 `Reduce` 分区中，中间 key/value 对是按照 key 值升序处理的。这样的顺序保证对输出的每个文件都是有序的，这样在 Reduce Worker 在读取时非常方便，例如可以对不同的文件使用归并排序。
+
+但 paper 没说这个顺序保证在哪做的，看起来是在 Map Worker 中最后进行一次排序。

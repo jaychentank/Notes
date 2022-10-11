@@ -103,46 +103,19 @@ vector<int> smallestSubarrays(vector<int> &nums) {
 
 ## Codeforces
 
-1. **1060C** 矩阵C\[i][j]=a\[i]*b\[j]，C中子矩阵的元素和等于a和b的子数组的元素和的积。
+1. **807 Div.2**
 
-2. **819 Div.2**
+   D. Mark and Lightbulbs
 
-   ![image-20220826200939944](Problem & Contest.assets/image-20220826200939944.png)
-
-   ~~~C++
-   int ans = 0;
-   for (int i = 1; i <= n; ++i){
-       ans += (a[i] != a[i + 1]) * (n - (i + 1) + 1) * i;
-   }
-   while (m--)
-   {
-       int i, x;
-       cin >> i >> x;
-       ans -= (a[i] != a[i - 1]) * (n - i + 1) * (i - 1);
-       ans -= (a[i + 1] != a[i]) * (n - (i + 1) + 1) * i;
-       a[i] = x;
-       ans += (a[i] != a[i - 1]) * (n - i + 1) * (i - 1);
-       ans += (a[i + 1] != a[i]) * (n - (i + 1) + 1) * i;
-       cout << ans + n * (n + 1) / 2 << ;
-   }
-   ~~~
-   
-3. **808 Div.2**
-
-   **D. Difference Array**
-
-   ![image-20220823224000611](Problem & Contest.assets/image-20220823224000611.png)
-
-4. **807 Div.2**
+   对于一个字符串s，从2,3，…，n−1中选择索引i（满足si−1≠si+1），然后翻转si，返回s变化到t的最小操作数。
 
    ![image-20220824094644769](Problem & Contest.assets/image-20220824094644769.png)
 
-5. **805 Div.3**
+2. **805 Div.3**
 
    ![image-20220826155542022](Problem & Contest.assets/image-20220826155542022.png)
 
    ~~~C++
-   //hai'k'y
    vector<int> deg(n);
    dsu d(2 * n);
    for (int i = 0; i < n; i++) {
@@ -162,12 +135,6 @@ vector<int> smallestSubarrays(vector<int> &nums) {
    }
    cout << (flag ? "YES" : "NO") << endl;
    ~~~
-
-6. 933 A
-
-   ![image-20220831221632217](Problem & Contest.assets/image-20220831221632217.png)
-
-   ![image-20220831221649734](Problem & Contest.assets/image-20220831221649734.png)
 
 ## Google competition
 
@@ -272,13 +239,19 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
 
 ## Atcoder
 
-**AtCoder Beginner Contest 265**
+### AtCoder Beginner Contest 271
+
+**F - XOR on Grid Path**
+
+当正常暴力搜索复杂度高的时候，可以通过双向广搜降低复杂度（从(0,0)向反对角线搜，(n-1,n-1)也向反对角线搜）
+
+### AtCoder Beginner Contest 265
 
 **E-Warp**
 
 ![image-20220823111750949](Problem & Contest.assets/image-20220823111750949.png)
 
-**AtCoder Beginner Contest 264**
+### AtCoder Beginner Contest 264
 
 D-Left Right Operation
 
@@ -292,7 +265,7 @@ D-Left Right Operation
 
 dp[i]＝（dp[i]+dp[i+1]+ dp[i+a[i]])/（a[i]+1）+1进行移项
 
-**AtCoder Beginner Contest 262**
+### AtCoder Beginner Contest 262
 
 **D-I Hate Non-integer Number**
 
