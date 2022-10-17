@@ -948,40 +948,41 @@ int query(int v, int l, int r, int L, int R) {
 #define rs(x) t[x].rs
 #define val(x) t[x].val
 #define mark(x) t[x].mark
-const int MAXV = 1e7;
-int cnt = 1;
+const int MAXV = 9e6;
+int cnt;
 struct node {
     ll val, mark;
     int ls, rs;
 } t[MAXV];
-void push_down(int p) {
+void push_down(int p, int len) {
+    if (len <= 1) return;
     if (!ls(p)) ls(p) = ++cnt;
     if (!rs(p)) rs(p) = ++cnt;
-    val(ls(p)) += mark(p);
+    val(ls(p)) += mark(p) * (len / 2);
     mark(ls(p)) += mark(p);
-    val(rs(p)) += mark(p);
+    val(rs(p)) += mark(p) * (len - len / 2);
     mark(rs(p)) += mark(p);
     mark(p) = 0;
 }
 void update(int v, int l, int r, int L, int R, int d) {
     if (R<l || L>r) return;
     if (l >= L && r <= R) {
-        val(v) += d;
+        val(v) += d * (r - l + 1);
         mark(v) += d;
         return;
     }
-    push_down(v);
+    push_down(v, r - l + 1);
     int mid = (l + r - 1) / 2;
     update(ls(v), l, mid, L, R, d);
     update(rs(v), mid + 1, r, L, R, d);
-    val(v) = min(val(ls(v)), val(rs(v)));
+    val(v) = val(ls(v)) + val(rs(v));
 }
 ll query(int v, int l, int r, int L, int R) {
-    if (R<l || L>r) return INT_MAX;
+    if (R<l || L>r) return 0;
     if (l >= L && r <= R) return val(v);
-    push_down(v);
+    push_down(v, r - l + 1);
     int mid = (l + r - 1) / 2;
-    return min(query(ls(v), l, mid, L, R), query(rs(v), mid + 1, r, L, R));
+    return query(ls(v), l, mid, L, R) + query(rs(v), mid + 1, r, L, R);
 }
 ~~~
 

@@ -240,19 +240,49 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
 
 当正常暴力搜索复杂度高的时候，可以通过双向广搜降低复杂度（从(0,0)向反对角线搜，(n-1,n-1)也向反对角线搜）
 
+### AtCoder Beginner Contest 270
+
+**D - Stones**
+
+![image-20221015185909107](Problem & Contest.assets/image-20221015185909107.png)
+
+贪心反例：`10 9 8 4`
+
+~~~C++
+function<int(int, int)> dfs = [&](int u, int last) {
+    if (!u) return 0;
+    if (f[u][last] != -1) return f[u][last];
+    if (last) {
+        int res = -1e9;
+        forn(i, k) {
+            if (a[i] <= u) {
+                res = max(res, dfs(u - a[i], 0) + a[i]);
+            }
+        }
+        return f[u][last] = res;
+    }
+    else {
+        int res = 1e9;
+        forn(i, k) {
+            if (a[i] <= u) {
+                res = min(res, dfs(u - a[i], 1) - a[i]);
+            }
+        }
+        return f[u][last] = res;
+    }
+};
+cout << (n + dfs(n, 1)) / 2 << endl;
+~~~
+
+
+
 ### AtCoder Beginner Contest 265
 
-**E-Warp**
+**E - Warp**
 
 ![image-20220823111750949](Problem & Contest.assets/image-20220823111750949.png)
 
 ### AtCoder Beginner Contest 264
-
-D-Left Right Operation
-
-![image-20220824221905101](Problem & Contest.assets/image-20220824221905101.png)
-
-这样每个元素都有三种状态，这样可以 通过dp来求得答案。
 
 **E-Sugoroku 3**
 
@@ -262,7 +292,7 @@ dp[i]＝（dp[i]+dp[i+1]+ dp[i+a[i]])/（a[i]+1）+1进行移项
 
 ### AtCoder Beginner Contest 262
 
-**D-I Hate Non-integer Number**
+**D - I Hate Non-integer Number**
 
 ![image-20220825172544543](Problem & Contest.assets/image-20220825172544543.png)
 
@@ -359,7 +389,7 @@ cout << dp.back() << endl;
 
 #### Q - Flowers
 
-dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在lognlogn的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
+dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在`lognlogn`的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
 
 ~~~C++
 //用树状数组修改和维护区间最大值
@@ -399,8 +429,6 @@ DP+矩阵快速幂
 
 #### T - Permutation(插入dp)
 
-   ![image-20220905230040499](Problem & Contest.assets/image-20220905230040499.png)
-
    ~~~C++
    vvl f(n + 1, vl(n + 1)), sum(n + 1, vl(n + 1));
    //f[i][j]表示前i个数字为1-i的全排列并且第i个数字是j且满足大小关系的方案数
@@ -410,7 +438,7 @@ DP+矩阵快速幂
    fort(i, 1, n) {
        fort(j, 1, i + 2) {
            if (s[i - 1] == '<')f[i + 1][j] = (f[i + 1][j] + sum[i][j - 1]) % mod;
-           else f[i + 1][j] = (f[i + 1][j] + sum[i][i + 1] - sum[i][j - 1] + mod) % mod;
+           else f[i + 1][j] = (f[i + 1][j] + sum[i][i] - sum[i][j - 1] + mod) % mod;
        }
        fort(j, 1, n + 1) sum[i + 1][j] = (sum[i + 1][j - 1] + f[i + 1][j]) % mod;
    }
@@ -649,6 +677,7 @@ x|y+x&y=x+y
 
 1. round E 2020 Toys
 2. round b 2019 Diverse Subarray
+3. round h 2019 Diagonal Puzzle
 
 # 笔试题
 
