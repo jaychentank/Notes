@@ -68,85 +68,6 @@
 
 **人们对于弱一致感兴趣的原因是，虽然强一致可以确保get获取的是最新的数据，但是实现这一点的代价非常高。几乎可以确定的是，分布式系统的各个组件需要做大量的通信，才能实现强一致性。如果你有多个副本，那么不管get还是put都需要询问每一个副本。**所以，为了尽可能的避免通信，人们常常会使用弱一致系统，你只需要更新最近的数据副本，并且只需要从最近的副本获取数据。
 
-## 1.7 MapReduce基本工作方式
-
-MapReduce是由Google设计，开发和使用的一个系统，相关的论文在2004年发表。Google当时面临的问题是，他们需要在TB级别的数据上进行大量的计算。Google买了大量的计算机，并让它的聪明的工程师在这些计算机上编写分布式软件，这样工程师们可以将手头的问题分包到大量计算机上去完成，管理这些运算，并将数据取回。
-
-Google需要一种框架，可以让它的工程师能够进行任意的数据分析，例如排序，网络索引器，链接分析器以及任何的运算。工程师只需要实现应用程序的核心，就能将应用程序运行在数千台计算机上，而不用考虑如何将运算工作分发到数千台计算机，如何组织这些计算机，如何移动数据，如何处理故障等等这些细节，这样普通工程师也可以很容易的完成并运行大规模的分布式运算。这就是MapReduce出现的背景。
-
-**MapReduce的思想是，应用程序设计人员和分布式运算的使用者，只需要写简单的Map函数和Reduce函数，而不需要知道任何有关分布式的事情，MapReduce框架会处理剩下的事情。**
-
-抽象来看，MapReduce假设有一些输入，这些输入被分割成大量的不同的文件或者数据块。所以，我们假设现在有输入文件1，输入文件2和输入文件3，这些输入可能是从网上抓取的网页，更可能是包含了大量网页的文件。
-
-MapReduce启动时，会查找Map函数。之后，**MapReduce框架会为每个输入文件运行Map函数**。这里很明显有一些可以并行运算的地方，比如说可以并行运行多个只关注输入和输出的Map函数。
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDIyD6H77qUPZfWGjIo%2F-MDJAEJOBpdAOBgS6ONi%2Fimage.png?alt=media&token=ef4f5796-ccf4-4176-bfbb-78e18a5990c1)
-
-Map函数以文件作为输入，文件又是整个输入数据的一部分。**Map函数的输出是一个key-value对的列表**。假设我们在实现一个最简单的MapReduce Job：单词计数器。它会统计每个单词出现的次数。在这个例子中，Map函数会输出key-value对，其中key是单词，而value是1。Map函数会将输入中的每个单词拆分，并输出一个key-value对，key是该单词，value是1。最后需要对所有的key-value进行计数，以获得最终的输出。所以，假设输入文件1包含了单词a和单词b，Map函数的输出将会是key=a，value=1和key=b，value=1。第二个Map函数只从输入文件2看到了b，那么输出将会是key=b，value=1。第三个输入文件有一个a和一个c。
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDIyD6H77qUPZfWGjIo%2F-MDJCIHw5xEjErDGUwg0%2Fimage.png?alt=media&token=242d8247-c6ee-423b-a80f-73a8f9b685f0)
-
-我们对所有的输入文件都运行了Map函数，并得到了论文中称之为中间输出（intermediate output），也就是每个Map函数输出的key-value对。
-
-**运算的第二阶段是运行Reduce函数。MapReduce框架会收集所有Map函数输出的每一个单词的统计**。比如说，MapReduce框架会先收集每一个Map函数输出的key为a的key-value对。收集了之后，会将它们提交给Reduce函数。
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDMNyDk-zmwaD9kvov1%2F-MDMS2JAhAoGaraFmIYK%2Fimage.png?alt=media&token=307adb73-eb4c-43a2-9bef-847600403da7)
-
-我们收集所有的b，并将它们提交给另一个Reduce函数。这个Reduce函数的入参是所有的key为b的key-value对。对c也是一样。所以，**MapReduce框架会为所有Map函数输出的每一个key，调用一次Reduce函数。**
-
-在我们这个简单的单词计数器的例子中，Reduce函数只需要统计传入参数的长度，甚至都不用查看传入参数的具体内容，因为每一个传入参数代表对单词加1，而我们只需要统计个数。最后，每个Reduce都输出与其关联的单词和这个单词的数量。所以第一个Reduce输出a=2，第二个Reduce输出b=2，第三个Reduce输出c=1。
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDMNyDk-zmwaD9kvov1%2F-MDMVik1sf9kZLPEawuK%2Fimage.png?alt=media&token=3131d750-40c0-40ca-bfe9-fe002ac30f3b)
-
-这就是一个典型的MapReduce Job。从整体来看，为了保证完整性，有一些术语要介绍一下：
-
-1. Job。整个MapReduce计算称为Job。
-2. Task。每一次MapReduce调用称为Task。
-
-所以，对于一个完整的MapReduce Job，它由一些Map Task和一些Reduce Task组成。
-
-## 1.8 Map函数和Reduce函数
-
-Map函数使用一个key和一个value作为参数。我们这里说的函数是由普通编程语言编写，例如C++，Java等，所以这里的函数任何人都可以写出来。入参中，key是输入文件的名字，通常会被忽略，因为我们不太关心文件名是什么，value是输入文件的内容。所以，对于一个单词计数器来说，value包含了要统计的文本，我们会将这个文本拆分成单词。之后对于每一个单词，我们都会调用emit。**emit由MapReduce框架提供**，并且这里的emit属于Map函数。emit会接收两个参数，其中一个是key，另一个是value。在单词计数器的例子中，emit入参的key是单词，value是字符串“1”。这就是一个Map函数。在一个单词计数器的MapReduce Job中，Map函数实际就可以这么简单。而这个**Map函数不需要知道任何分布式相关的信息，不需要知道有多台计算机，不需要知道实际会通过网络来移动数据。这里非常直观。**
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDMXTr58UU0Viim9EbH%2F-MDM_1yjuBd7yzvg5Lcp%2Fimage.png?alt=media&token=303356e8-e8ca-408f-a2e2-b442e2471051)
-
-Reduce函数的入参是某个特定key的所有实例（Map输出中的key-value对中，出现了一次特定的key就可以算作一个实例）。**所以Reduce函数也是使用一个key和一个value作为参数，其中value是一个数组，里面每一个元素是Map函数输出的key的一个实例的value。**对于单词计数器来说，key就是单词，value就是由字符串“1”组成的数组，所以，我们不需要关心value的内容是什么，我们只需要关心value数组的长度。Reduce函数也有一个属于自己的emit函数。这里的emit函数只会接受一个参数value，这个value会作为Reduce函数入参的key的最终输出。所以，对于单词计数器，我们会给emit传入数组的长度。这就是一个最简单的Reduce函数。并且Reduce也不需要知道任何有关容错或者其他有关分布式相关的信息。
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDMXTr58UU0Viim9EbH%2F-MDMc7kqC0eAjwQLIu7Q%2Fimage.png?alt=media&token=c127778b-a9f8-4712-a87f-f668c6558a57)
-
-
-
-对于MapReduce的基本框架有什么问题吗？
-
-> 学生提问：可以将Reduce函数的输出再传递给Map函数吗？
->
-> Robert教授：在现实中，这是很常见的。MapReduce用户定义了一个MapReduce Job，接收一些输入，生成一些输出。之后可能会有第二个MapReduce Job来消费前一个Job的输出。对于一些非常复杂的多阶段分析或者迭代算法，比如说Google用来评价网页的重要性和影响力的PageRank算法，这些算法是逐渐向答案收敛的。我认为Google最初就是这么使用MapReduce的，他们运行MapReduce Job多次，每一次的输出都是一个网页的列表，其中包含了网页的价值，权重或者重要性。所以将MapReduce的输出作为另一个MapReduce Job的输入这很正常。
-
-现实中，**MapReduce运行在大量的服务器之上，我们称之为worker服务器或者worker**。同时，也会**有一个Master节点来组织整个计算过程**。这里实际发生的是，Master服务器知道有多少输入文件，例如5000个输入文件，之后**它将Map函数分发到不同的worker**。所以，它会向worker服务器发送一条消息说，请对这个输入文件执行Map函数吧。之后，MapReduce框架中的worker进程会读取文件的内容，调用Map函数并将文件名和文件内容作为参数传给Map函数。worker进程还需要实现emit，这样，**每次Map函数调用emit，worker进程就会将数据写入到本地磁盘的文件中。所以，Map函数中调用emit的效果是在worker的本地磁盘上创建文件，这些文件包含了当前worker的Map函数生成的所有的key和value。**
-
-所以，Map阶段结束时，我们看到的就是Map函数在worker上生成的一些文件。之后，MapReduce的worker会将这些数据移动到Reduce所需要的位置。对于一个典型的大型运算，Reduce的入参包含了所有Map函数对于特定key的输出。通常来说，每个Map函数都可能生成大量key。所以通常来说，**在运行Reduce函数之前。运行在MapReduce的worker服务器上的进程需要与集群中每一个其他服务器交互来询问说，看，我需要对key=a运行Reduce，请看一下你本地磁盘中存储的Map函数的中间输出，找出所有key=a，并通过网络将它们发给我。**所以，Reduce worker需要从每一个worker获取特定key的实例。这是**通过由Master通知到Reduce worker的一条指令来触发。一旦worker收集完所有的数据，它会调用Reduce函数，Reduce函数运算完了会调用自己的emit，这个emit与Map函数中的emit不一样，它会将输出写入到一个Google使用的共享文件服务中。**
-
-有关输入和输出文件的存放位置，这是我之前没有提到的，它们都存放在文件中，但是因为我们想要灵活的在任意的worker上读取任意的数据，这意味着我们需要某种网络文件系统（network file system）来存放输入数据。所以实际上，MapReduce论文谈到了**GFS**（Google File System）。**GFS是一个共享文件服务，并且它也运行在MapReduce的worker集群的物理服务器上。GFS会自动拆分你存储的任何大文件，并且以64MB的块存储在多个服务器之上。**如果我们有1000台服务器，我们会启动1000个Map worker，每个Map worker会读取1/1000输入数据。这些Map worker可以并行的从1000个GFS文件服务器读取数据，并获取巨大的读取吞吐量，也就是1000台服务器能提供的吞吐量。
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDN6mwa8H8nyhZDCGAy%2F-MDPZnntD2OS6SenFwGk%2Fimage.png?alt=media&token=64a469be-250a-4d10-bb19-89cbc0347628)
-
-如果随机的选择MapReduce的worker服务器和GFS服务器，那么至少有一半的机会，它们之间的通信需要经过root交换机，而这个root交换机的吞吐量总是固定的。如果做一个除法，root交换机的总吞吐除以2000，那么每台机器只能分到50Mb/S的网络容量。这个网络容量相比磁盘或者CPU的速度来说，要小得多。所以，50Mb/S是一个巨大的限制。
-
-在MapReduce论文中，讨论了大量的避免使用网络的技巧。其中一个是将GFS和MapReduce混合运行在一组服务器上。所以如果有1000台服务器，那么GFS和MapReduce都运行在那1000台服务器之上。**当MapReduce的Master节点拆分Map任务并分包到不同的worker服务器上时，Master节点会找出输入文件具体存在哪台GFS服务器上，并把对应于那个输入文件的Map Task调度到同一台服务器上**。虽然由于故障，负载或者其他原因，不能总是让Map函数都读取本地文件，但是几乎所有的Map函数都会运行在存储了数据的相同机器上，并因此节省了大量的时间，否则通过网络来读取输入数据将会耗费大量的时间。
-
-Map函数会将输出存储到机器的本地磁盘，所以存储Map函数的输出不需要网络通信，至少不需要实时的网络通信。但是，我们可以确定的是，为了收集所有特定key的输出，并将它们传递给某个机器的Reduce函数，还是需要网络通信。假设现在我们想要读取所有的相关数据，并通过网络将这些数据传递给单台机器，数据最开始在运行Map Task的机器上按照行存储（例如第一行代表第一个Map函数输出a=1，b=1），而我们最终需要这些数据在运行Reduce函数的机器上按照列存储（例如，Reduce函数需要的是第一个Map函数的a=1和第三个Map函数的a=1）。
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDN6mwa8H8nyhZDCGAy%2F-MDPfXpADnUuC04cOzkH%2Fimage.png?alt=media&token=f88a24a0-d08c-4492-86a1-c89ff6caf9fe)
-
-论文里称这种数据转换之为**洗牌**（shuffle）。所以，这里确实需要将每一份数据都通过网络从创建它的Map节点传输到需要它的Reduce节点。所以，这也是MapReduce中代价较大的一部分。
-
-所以这里的shuffle的重点是，这里实际上可能会有大量的网络通信。假设你在进行排序，排序的输入输出会有相同的大小。Reduce的输出也会存储在GFS上。但是Reduce只会生成key-value对，MapReduce框架会收集这些数据，并将它们写入到GFS的大文件中。所以，这里有一大轮的网络通信，将每个Reduce的输出传输到相应的GFS服务器上。你或许会认为，这里会使用相同的技巧，就将Reduce的输出存储在运行了Reduce Task的同一个GFS服务器上（因为是混部的）。或许Google这么做了，但是因为GFS会将数据做拆分，并且为了提高性能并保留容错性，数据会有2-3份副本。这意味着，不论你写什么，你总是需要通过网络将一份数据拷贝写到2-3台服务器上。所以，这里会有大量的网络通信。这里的网络通信，是2004年限制MapReduce的瓶颈。在2020年，因为之前的网络架构成为了人们想在数据中心中做的很多事情的限制因素，现代数据中心中，root交换机比过去快了很多。并且，你或许已经见过，一个典型的现代数据中心网络，会有很多的root交换机而不是一个交换机（spine-leaf架构）。每个机架交换机都与每个root交换机相连，网络流量在多个root交换机之间做负载分担。所以，现代数据中心网络的吞吐大多了。
-
-![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDN6mwa8H8nyhZDCGAy%2F-MDPo5GjZT0JbipeZrJn%2Fimage.png?alt=media&token=3010b3b3-a19c-4e21-88b8-05dea250accc)
-
-我认为Google几年前就不再使用MapReduce了，不过在那之前，现代的MapReduce已经不再尝试在GFS数据存储的服务器上运行Map函数了，它乐意从任何地方加载数据，因为网络已经足够快了。
-
 ##  论文阅读：*MapReduce*
 
 ### 1.MapReduce
@@ -237,3 +158,5 @@ Worker 可以记录处理的最后一条记录的序号发送给 Master，当 Ma
 ![image-20221012110412392](MIT 6.824.assets/image-20221012110412392.png)
 
 测试流程要求，输出的文件个数和参数`nReduce`相同，即每个输出文件对应一个`reduce`任务，格式和`mrsequential`的输出格式相同，命名为`mr-out*`。我们的代码应保留这些文件，不做进一步合并，测试脚本将进行这一合并。合并之后的最终完整输出，必须和`mrsequential`的输出完全相同。
+
+### 具体实现
