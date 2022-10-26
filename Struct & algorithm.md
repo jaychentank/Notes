@@ -335,43 +335,23 @@ int gcd(int a,int b){
 
 **扩展欧几里得算法的描述是：一定存在整数 x, y 满足等式 a * x + b * y = gcd(a,b)**，求解x, y
 
-![image-20220906224831745](Struct & algorithm.assets/image-20220906224831745.png)
-
-~~~C++
-int exgcd(int a, int b, int& x, int& y) {
-    if(a < b) return exgcd(b, a, y, x);
-    if(b == 0) {
-        x = 1; y = 0;
-        return a;
-    } else {
-        int x1;
-        int d = exgcd(b, a % b, x1, x);
-        y = x1 - a / b * x;
-        return d;
-    }
-}
-~~~
-
-![image-20220906224850731](Struct & algorithm.assets/image-20220906224850731.png)
-
-![image-20220906225744287](Struct & algorithm.assets/image-20220906225744287.png)
-
-~~~C++
-int inv(int n, int p) {
-    int x, y;
-    if(exgcd(n, p, x, y) == 1) {
-        x = x % p;
-        return x >= 0 ? x : p + x;
-    } else {
-        return -1;
-    }
-}
-~~~
-
 ### 费马小定理/欧拉定理
 
 **如果a和p互质**，a^(p-1)≡1 (mod p)
 如果p/q，我们需要一个E满足E×q≡p(mod(1e9+7))，则E=p*(q^1e9+7-2)
+
+### 线性求逆元
+
+![image-20221025215522192](Struct & algorithm.assets/image-20221025215522192.png)
+
+![image-20221025215531286](Struct & algorithm.assets/image-20221025215531286.png)
+
+~~~C++
+inv[1] = 1;
+for (int i = 2; i <= n; ++i) {
+  inv[i] = (long long)(p - p / i) * inv[p % i] % p;
+}
+~~~
 
 ### 整数分块
 
@@ -883,7 +863,7 @@ t[x]节点覆盖的长度等于lowbit(x)
 //还可以维护和修改区间最大值
 class BIT {
 private:
-    vector<int> tree;
+    vector<long long> tree;
 public:
     BIT(int n) : tree(n) {}
     void add(int x) {
@@ -892,8 +872,8 @@ public:
             x += x & -x;
         }
     }
-    int query(int x) {
-        int res = 0;
+    long long query(int x) {
+        long l res = 0;
         while (x > 0) {
             res += tree[x];
             x &= x - 1;
@@ -1245,6 +1225,12 @@ void dfs2(int u, int f)
 
 应用于整数划分
 
+## 概率dp
+
+一般情况下，解决概率问题需要顺序循环，而解决期望问题使用逆序循环
+
+看一系列事情的总的期望，等于第一件事的期望，加第二件事的期望，加......
+
 # 图论
 
 ## 最短路（Bellman-Ford）
@@ -1431,3 +1417,27 @@ void dfs(int u) {
 }
 reverse(all(ans));
 ~~~
+
+## tarjan算法
+
+~~~C++
+vector<int> dfn, low;// 节点的时间戳和追溯值
+void tarjan(int u, int fa) {
+    dfn[u] = low[u] = ++num;
+    for (int v : adj[u]) {
+        if (v == fa) continue;
+        if (!dfn[v]) {
+            tarjan(v, u);
+            low[u] = min(low[u], low[v]);
+            if (dfn[u] < low[v]) res.push_back({ u, v });
+        }
+        else {
+            low[u] = min(low[u], dfn[v]);
+        }
+    }
+}
+for (int u = 0; u < n; u++) {
+	if (!dfn[u]) tarjan(u, -1);
+}
+~~~
+

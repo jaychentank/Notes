@@ -343,7 +343,7 @@ GFS集群包括：一个master和多个chunkserver，并且若干个client会与
 主要架构特性：
 
 1. **chunk**：存储在 GFS 中的文件分为多个 chunk，chunk 大小为 64M，每个 chunk 在创建时 master 会分配一个不可变、全局唯一的 64 位标识符(`chunk handle`)；**默认情况下，一个 chunk 有 3 个副本，分别在不同的 chunkserver 上**。
-2. **master**：维护文件系统的 **metadata**，它知道文件被分割为哪些 chunk、以及这些 chunk 的存储位置；它还负责 chunk 的迁移、重新平衡(rebalancing)和垃圾回收；此外，master 通过心跳（HeartBeat）与 chunkserver 通信，向其传递指令，并收集状态。
+2. **master**：维护文件系统的 **metadata**，它知道文件被分割为哪些 chunk、以及这些 chunk 的存储位置；它还负责 chunk 的迁移、重新平衡(rebalancing)和垃圾回收；此外，master 通过HeartBeat与 chunkserver 通信，向其传递指令，并收集状态。
 3. **client**：首先向 master 询问文件 metadata，然后根据 metadata 中的位置信息去对应的 chunkserver 获取数据；
 4. **chunkserver**：存储 chunk，**client 和 chunkserver 不会缓存 chunk 数据，防止数据出现不一致**；
 
@@ -462,3 +462,644 @@ GFS 通过 snapshot 来创建一个文件或者目录树的备份，它可以用
 #### **论文中提到了引用计数——这是什么？**
 
 引用计数用来实现 copy-on-write 生成快照。当 GFS 创建一个快照时，它并不立即复制 chunk，而是增加 GFS 中 chunk 的引用计数，表示这个 chunk 被快照引用了，等到客户端修改这个 chunk 时，才需要在 chunkserver 中拷贝 chunk 的数据生成新的 chunk，后续的修改操作落到新生成的 chunk 上。
+
+# Lecture 04 - VMware ET
+
+## 4.1 复制方法：状态转移和复制状态机
+
+**状态转移**背后的思想是，Primary将自己完整状态，比如说内存中的内容，拷贝并发送给Backup。Backup会保存收到的最近一次状态，所以Backup会有所有的数据。
+
+**复制状态机**基于这样的事实：通常情况下，如果一台计算机没有外部影响，它只是一个接一个的执行指令，每条指令执行的是计算机中内存和寄存器上确定的函数，只有当外部事件干预时，才会发生一些预期外的事。所以，复制状态机不会在不同的副本之间发送状态，而是将发送给Primary的外部事件发送给Backup。通常来说，如果有两台计算机，如果它们从相同的状态开始，并且它们以相同的顺序，在相同的时间，看到了相同的输入，那么它们会一直互为副本，并且一直保持一致。
+
+**所以，状态转移传输的是可能是内存，而复制状态机会将来自客户端的操作或者其他外部事件，从Primary传输到Backup。**人们倾向于使用复制状态机的原因是，通常来说，外部操作或者事件比服务的状态要小。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDrMmqnkatVPGB7x6Oo%2F-MDrW8WNv0is0gGYjrGr%2Fimage.png)
+
+VMware FT论文讨论的都是复制状态机，并且只涉及了单核CPU（面对多核和并行计算，状态转移更加健壮）。
+
+什么样的状态需要复制？VMware FT论文会复制机器的完整状态，Primary和Backup即使在最底层也是完全一样的。GFS也有复制，但是它绝对没有在Primary和Backup之间复制内存中的每一个bit，它复制的更多是应用程序级别的Chunk。VMware FT的独特之处在于，它从机器级别实现复制，因此它不关心你在机器上运行什么样的软件，它就是复制底层的寄存器和内存。所以，它的缺点是，它没有那么的高效，优点是，你可以将任何现有的软件，甚至你不需要有这些软件的源代码，你也不需要理解这些软件是如何运行的，在某些限制条件下，你就可以将这些软件运行在VMware FT的这套复制方案上。VMware FT就是那个可以让任何软件都具备容错性的魔法棒。
+
+## 4.2 VMware FT 工作原理
+
+首先，VMware是一个虚拟机公司，它们的业务主要是售卖虚拟机技术。虚拟机可以在同一个硬件上模拟出多个虚拟的计算机。
+
+VMware FT需要两个物理服务器。将Primary和Backup运行在一台服务器的两个虚拟机里面毫无意义，因为容错本来就是为了能够抵御硬件故障。所以，你至少需要两个物理服务器运行VMM（虚拟机监视程序），Primary虚机在其中一个物理服务器上，Backup在另一个物理服务器上。
+
+除此之外，在这个局域网（LAN，Local Area Network）还有一些客户端。实际上，它们不必是客户端，可以只是一些我们的多副本服务需要与之交互的其他计算机。其中一些客户端向我们的服务发送请求。
+
+所以，基本的工作流程是：
+
+1. 我们假设这两个副本，或者说这两个虚拟机：Primary和Backup，互为副本。某些我们服务的客户端，向Primary发送了一个请求，这个请求以网络数据包的形式发出。
+2. 这个网络数据包产生一个中断，之后这个中断送到了VMM。VMM可以发现这是一个发给我们的多副本服务的一个输入，所以这里VMM会做两件事情：
+3. 在虚拟机的guest操作系统中，模拟网络数据包到达的中断，以将相应的数据送给应用程序的Primary副本。除此之外，因为这是一个多副本虚拟机的输入，VMM会将网络数据包拷贝一份，并通过网络送给Backup虚机所在的VMM。
+4. Backup虚机所在的VMM知道这是发送给Backup虚机的网络数据包，它也会在Backup虚机中模拟网络数据包到达的中断，以将数据发送给应用程序的Backup。所以现在，Primary和Backup都有了这个网络数据包，它们有了相同的输入，再加上许多细节，它们将会以相同的方式处理这个输入，并保持同步。
+5. 当然，虚机内的服务会回复客户端的请求。在Primary虚机里面，服务会生成一个回复报文，并通过VMM在虚机内模拟的虚拟网卡发出。之后VMM可以看到这个报文，它会实际的将这个报文发送给客户端。
+6. 另一方面，由于Backup虚机运行了相同顺序的指令，它也会生成一个回复报文给客户端，并将这个报文通过它的VMM模拟出来的虚拟网卡发出。但是它的VMM知道这是Backup虚机，会丢弃这里的回复报文。所以这里，Primary和Backup都看见了相同的输入，但是只有Primary虚机实际生成了回复报文给客户端。
+
+这里有一个术语，VMware FT论文中将Primary到Backup之间同步的数据流的通道称之为Log Channel。虽然都运行在一个网络上，但是这些从Primary发往Backup的事件被称为Log Channel上的Log Event/Entry。
+
+![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDtfAj7Zq9oNnN5oFGi%2F-MDtoxLaiP_pMTorUOc7%2Fimage.png?alt=media&token=78a3255a-969c-48bd-a937-0be7e6a6b7b9)
+
+当Primary因为故障停止运行时，FT（Fault-Tolerance）就开始工作了。实际中，Backup每秒可以收到很多条Log，其中一个来源就是来自于Primary的定时器中断。每个Primary的定时器中断都会生成一条Log条目并发送给Backup，这些定时器中断每秒大概会有100次。所以，如果Primary虚机还在运行，Backup必然可以期望从Log Channel收到很多消息。所以当Backup不再从Primary收到消息，VMware FT论文的描述是，Backup虚机会上线（Go Alive）。Backup的VMM会在网络中做一些处理（猜测是发GARP），让后续的客户端请求发往Backup虚机，而不是Primary虚机。到此为止，Backup虚机接管了服务。
+
+## 4.3 非确定事件
+
+非确定性事件可以分成几类。
+
+**客户端输入**。假设有一个来自于客户端的输入，这个输入随时可能会送达，所以它是不可预期的。我们讨论的系统专注于通过网络来进行交互，所以这里的系统输入的唯一格式就是网络数据包。一个网络数据包对于我们来说有两部分，一个是数据包中的数据，另一个是提示数据包送达了的中断。当网络数据包送达时，通常网卡的DMA（Direct Memory Access）会将网络数据包的内容拷贝到内存，之后触发一个中断。操作系统会在处理指令的过程中消费这个中断。对于Primary和Backup来说，这里的步骤必须看起来是一样的，否则它们在执行指令的时候就会出现不一致。所以，这里的问题是，中断在什么时候，具体在指令流中的哪个位置触发？对于Primary和Backup，最好要在相同的时间，相同的位置触发，否则执行过程就是不一样的，进而会导致它们的状态产生偏差。所以，我们不仅关心网络数据包的内容，还关心中断的时间。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MDyiqxg-s1TjskYCIgH%2F-ME02D81ATmMYWIFWy8S%2Fimage.png)
+
+另外，有一些指令在不同的计算机上的行为是不一样的，这一类指令称为怪异指令，比如说：
+
+1. 随机数生成器
+2. 获取当前时间的指令，在不同时间调用会得到不同的结果
+3. 获取计算机的唯一ID
+
+所有的事件都需要通过Log Channel，从Primary同步到Backup。有关日志条目的格式可能是：
+
+1. 事件发生时的指令序号，这里的指令号是自机器启动以来指令的相对序号，而不是指令在内存中的地址。
+2. 日志条目的类型，可能是普通的网络数据输入，也可能是怪异指令。
+3. 最后是数据。如果是一个网络数据包，那么数据就是网络数据包的内容。如果是一个怪异指令，数据将会是这些怪异指令在Primary上执行的结果。这样Backup虚机就可以伪造指令，并提供与Primary相同的结果。
+
+Primary和Backup两个虚机内部的guest操作系统需要在模拟的硬件里有一个定时器，能够每秒触发100次中断，这样操作系统才可以通过对这些中断进行计数来跟踪时间。因此，这里的定时器必须在Primary和Backup虚机的完全相同位置产生中断，否则这两个虚机不会以相同的顺序执行指令，进而可能会产生分歧。所以，在运行了Primary虚机的物理服务器上，有一个定时器，这个定时器会计时，生成定时器中断并发送给VMM。在适当的时候，VMM会停止Primary虚机的指令执行，并记下当前的指令序号，**然后在指令序号的位置插入伪造的模拟定时器中断**，并恢复Primary虚机的运行。之后，VMM将指令序号和定时器中断再发送给Backup虚机。虽然Backup虚机的VMM也可以从自己的物理定时器接收中断，但是它并没有将这些物理定时器中断传递给Backup虚机的guest操作系统，而是直接忽略它们。当来自于Primary虚机的Log条目到达时，Backup虚机的VMM配合特殊的CPU特性支持，会使得物理服务器在相同的指令序号处产生一个定时器中断，之后VMM获取到这个中断，并伪造一个假的定时器中断，并将其送入Backup虚机的guest操作系统，并且这个定时器中断会出现在与Primary相同的指令序号位置。
+
+> 学生提问：如果Backup领先了Primary会怎么样？
+>
+> Robert教授： VMware FT是这么做的。它会维护一个来自于Primary的Log条目的等待缓冲区，如果缓冲区为空，Backup是不允许执行指令的。如果缓冲区不为空，那么它可以根据Log的信息知道Primary对应的指令序号，并且会强制Backup虚机最多执行指令到这个位置。
+
+## 4.4 输出控制
+
+在这个系统中，唯一的输出就是对于客户端请求的响应。客户端通过网络数据包将数据送入，服务器的回复也会以网络数据包的形式送出。Primary和Backup虚机都会生成回复报文，之后通过模拟的网卡送出，但是只有Primary虚机才会真正的将回复送出，而Backup虚机只是将回复简单的丢弃掉。
+
+真实情况会复杂一些。假设我们正在跑一个简单的数据库服务器，这个服务器支持一个计数器自增操作，工作模式是这样，客户端发送了一个自增的请求，服务器端对计数器加1，并返回新的数值。假设最开始一切正常，在Primary和Backup中的计数器都存了10。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-ME58-xtdT0q4Bk-qeNS%2F-ME5RcDZye9r6o2_3jwx%2Fimage.png)
+
+现在，局域网的一个客户端发送了一个自增的请求给Primary，
+
+这个请求在Primary虚机的软件中执行，Primary会发现，现在的数据是10，我要将它变成11，并回复客户端说，现在的数值是11。
+
+这个请求也会发送给Backup虚机，并将它的数值从10改到11。Backup也会产生一个回复，但是这个回复会被丢弃，这是我们期望发生的。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-ME58-xtdT0q4Bk-qeNS%2F-ME5S4RfoHgn85-B6_U4%2Fimage.png)
+
+但是，你需要考虑，如果在一个不恰当的时间，出现了故障会怎样？在这个例子中，假设Primary确实生成了回复给客户端，但是之后立马崩溃了。更糟糕的是，现在网络不可靠，Primary发送给Backup的Log条目在Primary崩溃时也丢包了。那么现在的状态是，客户端收到了回复说现在的数据是11，但是Backup虚机因为没有看到客户端请求，所以它保存的数据还是10。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-ME58-xtdT0q4Bk-qeNS%2F-ME5U1V6w6QGqwRodwgd%2Fimage.png)
+
+现在，因为察觉到Primary崩溃了，Backup接管服务。这时，客户端再次发送一个自增的请求，这个请求发送到了原来的Backup虚机，它会将自身的数值从10增加到11，并产生第二个数据是11的回复给客户端。如果客户端比较前后两次的回复，会发现一个明显不可能的场景（两次自增的结果都是11）。
+
+论文里的解决方法就是**控制输出**（Output Rule）。直到Backup虚机确认收到了相应的Log条目，Primary虚机不允许生成任何输出。让我们回到Primary崩溃前，并且计数器的内容还是10，Primary上的正确的流程是这样的：
+
+1. 客户端输入到达Primary。
+2. Primary的VMM将输入的拷贝发送给Backup虚机的VMM。所以有关输入的Log条目在Primary虚机生成输出之前，就发往了Backup。之后，这条Log条目通过网络发往Backup，但是过程中有可能丢失。
+3. Primary的VMM将输入发送给Primary虚机，Primary虚机生成了输出。现在Primary虚机的里的数据已经变成了11，生成的输出也包含了11。但是VMM不会无条件转发这个输出给客户端。
+4. Primary的VMM会等到之前的Log条目都被Backup虚机确认收到了才将输出转发给客户端。所以，包含了客户端输入的Log条目，会从Primary的VMM送到Backup的VMM，Backup的VMM不用等到Backup虚机实际执行这个输入，就会发送一个表明收到了这条Log的ACK报文给Primary的VMM。当Primary的VMM收到了这个ACK，才会将Primary虚机生成的输出转发到网络中。
+
+如果在上面的步骤2中，Log条目通过网络发送给Backup虚机时丢失了，然后Primary虚机崩溃了。因为Log条目丢失了， 所以Backup节点也不会发送ACK消息。所以，如果Log条目的丢失与Primary的崩溃同一时间发生，那么Primary必然在VMM将回复转发到网络之前就崩溃了，所以客户端也就不会收到任何回复，所以客户端就不会观察到任何异常。这就是输出控制（Output rule）。
+
+所以，Primary会等到Backup已经有了最新的数据，才会将回复返回给客户端。**这几乎是所有的复制方案中对于性能产生伤害的地方**。这里的同步等待使得Primary不能超前Backup太多，因为如果Primary超前了并且又故障了，对应的就是Backup的状态落后于客户端的状态。
+
+所以如果条件允许，人们会更喜欢使用在更高层级做复制的系统（GFS）。这样的复制系统可以理解操作的含义，这样的话Primary虚机就不必在每个网络数据包暂停同步一下，而是可以在一个更高层级的操作层面暂停来做同步，甚至可以对一些只读操作不做暂停。但是这就需要一些特殊的应用程序层面的复制机制。
+
+## 4.5 重复输出
+
+还有一种可能的情况是，回复报文已经从VMM发往客户端了，所以客户端收到了回复，但是这时Primary虚机崩溃了。而在Backup侧，客户端请求还堆积在Backup对应的VMM的Log等待缓冲区），也就是说客户端请求还没有真正发送到Backup虚机中。当Primary崩溃之后，Backup接管服务，Backup首先需要消费所有在等待缓冲区中的Log，以保持与Primay在相同的状态，这样Backup才能以与Primary相同的状态接管服务。假设最后一条Log条目对应来自客户端的请求，那么Backup会在处理完客户端请求对应的中断之后，再上线接管服务。这意味着，Backup会将自己的计数器增加到11（原来是10，处理完客户端的自增请求变成11），并生成一个输出报文。因为这时，Backup已经上线接管服务，它生成的输出报文会被它的VMM发往客户端。这样客户端会收到两个内容是11的回复。如果这里的情况真的发生了，那么明显这也是一个异常行为，因为不可能在运行在单个服务器的服务上发生这种行为。
+
+好消息是，客户端通过TCP与服务进行交互，也就是说客户端请求和回复都通过TCP Channel收发。当Backup接管服务时，因为它的状态与Primary相同，所以它知道TCP连接的状态和TCP传输的序列号。当Backup生成回复报文时，**这个报文的TCP序列号与之前Primary生成报文的TCP序列号是一样的，这样客户端的TCP栈会发现这是一个重复的报文，它会在TCP层面丢弃这个重复的报文，用户层的软件永远也看不到这里的重复**。
+
+这里可以认为是异常的场景，并且被意外的解决了。但是事实上，**对于任何有主从切换的复制系统，基本上不可能将系统设计成不产生重复输出**。
+
+## 4.6 Test - and - Set服务
+
+最后还有一个细节。我一直都假设Primary出现的是fail-stop故障，但是这不是所有的情况。一个非常常见的场景就是，Primary和Backup都在运行，**但是它们之间的网络出现了问题**，同时它们各自又能够与一些客户端通信。这时，它们都会以为对方挂了，自己需要上线并接管服务。所以现在，我们对于同一个服务，有两个机器是在线的。因为现在它们都不向彼此发送Log条目，它们自然就出现了分歧。它们或许会因为接收了不同的客户端请求，而变得不一样。
+
+如果我们同时让Primary和Backup都在线，那么我们现在就有了**脑裂**（Split Brain）。这篇论文解决这个问题的方法是，向一个外部的第三方权威机构求证，来决定Primary还是Backup允许上线。
+
+Test-and-Set服务不运行在Primary和Backup的物理服务器上，VMware FT需要通过网络支持Test-and-Set服务。为了能够上线，Primary和Backup或许会同时发送一个Test-and-Set请求到Test-and-Set服务器。Test-and-Set服务就是一个仲裁官，决定了两个副本中哪一个应该上线。
+
+# Lecture 06 - Raft1
+
+## 6.1 脑裂
+
+在之前几个具备容错特性（fault-tolerant）的系统中它们有一个共同的特点。
+
+1. MapReduce复制了计算，但是复制这个动作，或者说整个MapReduce被一个单主节点控制。
+2. GFS以主备（primary-backup）的方式复制数据。它会实际的复制文件内容。但是它也依赖一个单主节点，来确定每一份数据的主拷贝的位置。
+3. VMware FT，它在一个Primary虚机和一个Backup虚机之间复制计算相关的指令。但是，当其中一个虚机出现故障时，为了能够正确的恢复。需要一个Test-and-Set服务来确认，Primary虚机和Backup虚机只有一个能接管计算任务。
+
+这三个例子中，它们都是一个多副本系统（replication system），它们存在一个共性：需要决定谁是Primary。使用一个单节点的好处是，它不可能否认自己，它的决策就是整体的决策。但是使用单节点的缺点是，它本身又是一个单点故障（Single Point of Failure）。
+
+现在，我们来假设我们有一个网络，这个网络里面有两个服务器（S1，S2），这两个服务器都是我们Test-and-Set服务的拷贝。这个网络里面还有两个客户端（C1，C2），它们需要通过Test-and-Set服务确定主节点是谁。在这个例子中，这两个客户端本身就是VMware FT中的Primary和Backup虚拟机。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MAncsrX9IsJ930Vo0f_%2F-MAnd86Q4TIfWQuWF9u7%2Fimage-16665813546617.png)
+
+如果这是一个Test-and-Set服务，那么你知道这两个服务器中的数据记录将从0开始。任意一个客户端发送Test-and-Set指令，这个指令会将服务器中的状态设置成1。所以在这个图里面，两个服务器都应该设置成1，然后将旧的值0，返回给客户端。本质上来说，这是一种简化了的锁服务。
+
+当C1可以访问S1但是不能访问S2，系统该如何响应？
+
+一种情况是，我们必然不想让C1只与S1通信，这样会导致S2的数据不一致。所以客户端必须总是与两个服务器交互，而不是只与其中一个服务器交互。但是这是一个错误的想法，因为现在我们有两个服务器，并且两个服务器都必须一致在线，这里的难度比单个服务器更大。
+
+另一个明显的答案是，如果一个客户端连接了两个服务器，为了达到一定的容错性，客户端只与其中一个服务器交互也应该可以正常工作。但是这样就不可避免的出现了这种情况：假设这根线缆中断了，将网络分为两个部分。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MAnkCBExKB5HBtXAlyE%2F-MAnkxVQclxW9QeDZWL5%2Fimage-16665813546619.png)
+
+C1发送Test-and-Set请求给S1，S1将自己的状态设置为1，并返回之前的状态0给C1。这就意味着，C1会认为自己持有锁。如果这是一个VMware FT，C1对应的虚拟机会认为自己可以成为主节点。
+
+但是同时，S2里面的状态仍然是0。所以如果现在C2也发送了一个Test-and-Set请求，本来应该发送给两个服务器，但是现在从C2看来，S1不能访问，根据之前定义的规则，那就发送给S2吧。同样的C2也会认为自己持有了锁。那么这两个VMware 虚机都会认为自己成为了主虚拟机而不需要与另一个虚拟机协商，所以这是一个错误的场景。
+
+当时的人们在构建多副本系统时，需要排除脑裂的可能。这里有两种技术：
+
+第一种是**构建一个不可能出现故障的网络**。
+
+另一种就是**人工解决问题**，不要引入任何自动完成的操作。
+
+## 6.2 过半票决
+
+尽管存在脑裂的可能，但是随着技术的发展，人们发现哪怕网络可能出现故障，实际上是可以正确的实现能够**自动完成故障切换**的系统。当网络出现故障，将网络分割成两半，网络的两边独自运行，且不能访问对方，这通常被称为**网络分区**。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MAnkCBExKB5HBtXAlyE%2F-MAnkxVQclxW9QeDZWL5%2Fimage-166658398045519.png)
+
+在构建能自动恢复，同时又避免脑裂的多副本系统时，关键点在于**过半票决**（Majority Vote）。这是用来构建Raft的一个基本概念。过半票决系统的第一步在于，服务器的数量要是奇数，而不是偶数。
+
+这样**在任何时候为了完成任何操作，你必须凑够过半的服务器来批准相应的操作**。这里有一点需要明确，我们是在说所有服务器数量的一半，而不是当前开机服务器数量的一半。
+
+对于任意两组过半服务器，至少有一个服务器是重叠的。相比其他特性，Raft更依赖这个特性来避免脑裂。例如，当一个Raft Leader竞选成功，那么这个Leader必然凑够了过半服务器的选票，而这组过半服务器中，必然与旧Leader的过半服务器有重叠。所以，新的Leader必然知道旧Leader使用的任期号（term number），因为新Leader的过半服务器必然与旧Leader的过半服务器有重叠，而旧Leader的过半服务器中的每一个必然都知道旧Leader的任期号。类似的，任何旧Leader提交的操作，必然存在于过半的Raft服务器中，而任何新Leader的过半服务器中，必然有至少一个服务器包含了旧Leader的所有操作。这是Raft能正确运行的一个重要因素。
+
+## 6.3 Raft初探
+
+Raft会以库（Library）的形式存在于服务中。如果你有一个基于Raft的多副本服务，那么每个服务的副本将会由两部分组成：应用程序代码和Raft库。应用程序代码接收RPC或者其他客户端请求；不同节点的Raft库之间相互合作，来维护多副本之间的操作同步。
+
+从软件的角度来看一个Raft节点，节点上层是应用程序代码，应用程序通常都有状态，Raft层会帮助应用程序将其状态拷贝到其他副本节点。对于一个Key-Value数据库而言，对应的状态就是Key-Value Table。应用程序往下，就是Raft层。所以，Key-Value数据库需要对Raft层进行函数调用，来传递自己的状态和Raft反馈的信息。同时Raft本身也会保持状态，Raft的状态中，最重要的就是Raft记录操作的日志。
+
+对于一个拥有三个副本的系统来说，很明显我们会有三个服务器，这三个服务器有完全一样的结构（上面是应用程序层，下面是Raft层）。除此之外，还有一些客户端，假设我们有了客户端1（C1），客户端2（C2）等等。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MAzIhju8QpKvQp_tuvt%2F-MAzKjFjBW1HmtXanymR%2Fimage.png)
+
+客户端就是一些外部程序代码，它们想要使用服务，会将请求发送给当前Raft集群中的Leader节点对应的应用程序。这里的请求就是应用程序级别的请求。
+
+假设客户端将请求发送给Raft的Leader节点，在服务端程序的内部，应用程序只会将来自客户端的请求对应的操作向下发送到Raft层，并且告知Raft层，请把这个操作提交到多副本的日志（Log）中，并在完成时通知我。
+
+之后，Raft节点之间相互交互，直到过半的Raft节点将这个新的操作加入到它们的日志中，也就是说这个操作被过半的Raft节点复制了。
+
+当且仅当Raft的Leader节点知道了过半节点的副本都有了这个操作的拷贝之后。Raft的Leader节点中的Raft层，会向上发送一个通知到应用程序，也就是Key-Value数据库。
+
+## 6.4 Log同步时序
+
+接下来我将画一个时序图来描述Raft内部的消息是如何工作的。假设我们有一个客户端，服务器1是当前Raft集群的Leader。同时，我们还有服务器2，服务器3。这张图的纵坐标是时间，越往下时间越长。
+
+1. 假设客户端将请求发送给服务器1，这里的客户端请求就是一个简单的请求，例如一个Put请求。
+2. 之后，服务器1的Raft层会发送一个添加日志（AppendEntries）的RPC到其他两个副本（S2，S3）。现在服务器1会一直等待其他副本节点的响应，一直等到过半节点的响应返回。这里的过半节点包括Leader自己。所以在一个只有3个副本节点的系统中，Leader只需要等待一个其他副本节点。
+3. 当Leader收到了过半服务器的正确响应，Leader会执行（来自客户端的）请求，得到结果，并将结果返回给客户端。
+4. 与此同时，服务器3可能也会将它的响应返回给Leader，尽管这个响应是有用的，但是这里不需要等待这个响应。这一点对于理解Raft论文中的图2是有用的。
+5. 现在Leader知道过半服务器已经添加了Log，可以执行客户端请求，并返回给客户端。但是服务器2还不知道这一点，服务器2只知道：我从Leader那收到了这个请求，但是我不知道这个请求是不是已经被Leader提交（committed）了，这取决于我的响应是否被Leader收到。服务器2只知道，它的响应提交给了网络，或许Leader没有收到这个响应，也就不会决定commit这个请求。所以这里还有一个阶段。一旦Leader发现请求被commit之后，它需要将这个消息通知给其他的副本。所以这里有一个额外的消息。
+6. 这条消息的具体内容依赖于整个系统的状态。至少在Raft中，没有明确的committed消息。相应的，committed消息被夹带在下一个AppendEntries消息中，由Leader下一次的AppendEntries对应的RPC发出。任何情况下，当有了committed消息时，这条消息会填在AppendEntries的RPC中。下一次Leader需要发送HeartBeat，或者是收到了一个新的客户端请求，要将这个请求同步给其他副本时，Leader会将新的更大的commit号随着AppendEntries消息发出，当其他副本收到了这个消息，就知道之前的commit号已经被Leader提交，其他副本接下来也会执行相应的请求，更新本地的状态。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBGHvLZY-xqxN_-Tncs%2F-MBGR2pnDa99hWttXxYr%2Fimage.png)
+
+## 6.5 日志
+
+Raft系统之所以对Log关注这么多的一个原因是，**Log是Leader用来对操作排序的一种手段**。对于复制状态机来说，所有副本不仅要执行相同的操作，还需要用相同的顺序执行这些操作。而Log与其他很多事物，共同构成了Leader对接收到的客户端操作分配顺序的机制。比如说，我有10个客户端同时向Leader发出请求，Leader必须对这些请求确定一个顺序，并确保所有其他的副本都遵从这个顺序。实际上，Log是一些按照数字编号的槽位（类似一个数组），槽位的数字表示了Leader选择的顺序。
+
+Log的另一个用途是，在一个（非Leader，也就是Follower）副本收到了操作，但是还没有执行操作时。该副本需要将这个操作存放在某处，直到收到了Leader发送的新的commit号才执行。所以，对于Raft的Follower来说，**Log是用来存放临时操作的地方**。Follower收到了这些临时的操作，但是还不确定这些操作是否被commit了，**这些操作可能会被丢弃**。
+
+Log的另一个用途是用在Leader节点，Leader需要在它的Log中记录操作，**如果一些Follower由于网络原因或者其他原因短时间离线了或者丢了一些消息，Leader需要能够向Follower重传丢失的Log消息**。所以，Leader也需要一个地方来存放客户端请求的拷贝。即使对那些已经commit的请求，为了能够向丢失了相应操作的副本重传，也需要存储在Leader的Log中。
+
+所有节点都需要保存Log还有一个原因，**就是它可以帮助重启的服务器恢复状态**。
+
+> 学生提问：假设Leader每秒可以执行1000条操作，Follower只能每秒执行100条操作，并且这个状态一直持续下去，会怎样？
+>
+> Robert（教授）：这里有一点需要注意，Follower在实际执行操作前会确认操作。所以，它们会确认，并将操作堆积在Log中。而Log又是无限的，所以Follower或许可以每秒确认1000个操作。如果Follower一直这么做，它会生成无限大的Log，因为Follower的执行最终将无限落后于Log的堆积。 所以，当Follower堆积了10亿（不是具体的数字，指很多很多）Log未执行，最终这里会耗尽内存。之后Follower调用内存分配器为Log申请新的内存时，内存申请会失败。Raft并没有流控机制来处理这种情况。
+>
+> 所以我认为，在一个实际的系统中，你需要一个额外的消息，这个额外的消息可以夹带在其他消息中，也不必是实时的，但是你或许需要一些通信来（让Follower）告诉Leader，Follower目前执行到了哪一步。这样Leader就能知道自己在操作执行上领先太多。所以是的，我认为在一个生产环境中，如果你想使用系统的极限性能，你还是需要一条额外的消息来调节Leader的速度。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBGVlc_DizHp8IG7Vhi%2F-MBGkBfxsvrJAszfjF10%2Fimage.png)
+
+## 6.6 应用层接口
+
+在Raft集群中，每一个副本上，这两层之间主要有两个接口。
+
+第一个接口是key-value层用来转发客户端请求的接口。如果客户端发送一个请求给key-value层，key-value层会将这个请求转发给Raft层，并说：请将这个请求存放在Log中的某处。这个接口实际上是个函数调用，称之为Start函数。这个函数只接收一个参数，就是客户端请求。key-value层说：我接到了这个请求，请把它存在Log中，并在committed之后告诉我。
+
+另一个接口是，随着时间的推移，Raft层会通知key-value层：哈，你刚刚在Start函数中传给我的请求已经commit了。Raft层通知的，不一定是最近一次Start函数传入的请求。这个向上的接口以go channel中的一条消息的形式存在。Raft层会发出这个消息，key-value层要读取这个消息。所以这里有个叫做applyCh的channel，通过它你可以发送ApplyMsg消息。
+
+当然，key-value层需要知道从applyCh中读取的消息，对应之前调用的哪个Start函数，所以Start函数的返回需要有足够的信息给key-value层，这样才能完成对应。Start函数的返回值包括，这个请求将会存放在Log中的位置（index）。这个请求不一定能commit成功，但是如果commit成功的话，会存放在这个Log位置。同时，它还会返回当前的任期号（term number）和一些其它我们现在还不太关心的内容。在ApplyMsg中，将会包含请求（command）和对应的Log位置（index）。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBGnNzriBVvlQ9BiPWz%2F-MBMNVDATVlo2e0EeTDf%2Fimage.png)
+
+所有的副本都会收到这个ApplyMsg消息，它们都知道自己应该执行这个请求，弄清楚这个请求的具体含义，并将它应用在本地的状态中。所有的副本节点还会拿到Log的位置信息（index），但是这个位置信息只在Leader有用，因为Leader需要知道ApplyMsg中的请求究竟对应哪个客户端请求（进而响应客户端请求）。
+
+对于Log来说有一件有意思的事情：不同副本的Log或许不完全一样。有很多场合都会不一样，至少不同副本节点的Log的末尾，会短暂的不同。不过对于Raft来说，Raft会最终强制不同副本的Log保持一致。或许会有短暂的不一致，但是长期来看，所有副本的Log会被Leader修改，直到Leader确认它们都是一致的。
+
+## 6.7 Leader选举
+
+为什么Raft系统会有个Leader，为什么我们需要一个Leader？
+
+实际上你可以不用Leader就构建一个类似的系统，仅仅通过一组服务器来共同认可Log的顺序，进而构建一个一致系统。
+
+有很多原因导致了Raft系统有一个Leader，其中一个最主要的是：通常情况下，如果服务器不出现故障，**有一个Leader的存在，会使得整个系统更加高效**。因为有了一个大家都知道的指定的Leader，对于一个请求，你可以只通过一轮消息就获得过半服务器的认可。对于一个无Leader的系统，通常需要一轮消息来确认一个临时的Leader，之后第二轮消息才能确认请求。所以，**使用一个Leader可以提升系统性能至2倍**。同时，有一个Leader可以更好的理解Raft系统是如何工作的。
+
+Raft生命周期中可能会有不同的Leader，它使用任期号（term number）来区分不同的Leader。Followers（非Leader副本节点）不需要知道Leader的ID，它们只需要知道当前的任期号。每一个任期最多有一个Leader，这是一个很关键的特性。
+
+每个Raft节点都有一个选举定时器（Election Timer），如果在这个定时器时间耗尽之前，当前节点没有收到任何当前Leader的消息，这个节点会认为Leader已经下线，并开始一次选举。
+
+开始一次选举的意思是，当前服务器会增加任期号（term number），因为它想成为一个新的Leader。之后，当前服务器会发出请求投票（RequestVote）RPC，这个消息会发给所有的Raft节点。其实只需要发送到N-1个节点，因为Raft规定了，Leader的候选人总是会在选举时投票给自己。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBMV0Om8ZxC4hvvfQgQ%2F-MBNqN2Ap3_GJ_0zXCqO%2Fimage.png)
+
+这里需要注意的一点是，**并不是Leader没有故障，就不会有选举**。但是如果Leader的确出现了故障，那么一定会有新的选举。这个选举的前提是其他服务器还在运行，因为选举需要其他服务器的选举定时器超时了才会触发。另一方面，如果Leader没有故障，我们仍然有可能会有一次新的选举。尽管Leader还在健康运行，我们可能会有某个选举定时器超时了，进而开启一次新的选举。
+
+假设网线故障了，旧的Leader在一个网络分区中，这个网络分区中有一些客户端和少数（未过半）的服务器。在网络的另一个分区中，有着过半的服务器，这些服务器选出了一个新的Leader。如果旧Leader在一个网络分区中，并且这个网络分区没有过半的服务器。那么下次客户端发送请求时，这个在少数分区的Leader，它会发出AppendEntries消息。但是因为它在少数分区，凑不齐过半服务器，所以它永远不会commit这个客户端请求，也不会告诉客户端它已经执行了这个请求。
+
+> 学生提问：有没有可能出现极端的情况，导致单向的网络出现故障，进而使得Raft系统不能工作？
+>
+> Robert教授：我认为是有可能的。例如，如果当前Leader的网络单边出现故障，Leader可以发出HeartBeat，但是又不能收到任何客户端请求。它发出的HeartBeat被送达了，因为它的出方向网络是正常的，那么它的HeartBeat会抑制其他服务器开始一次新的选举。但是它的入方向网络是故障的，这会阻止它接收或者执行任何客户端请求。这个场景是Raft并没有考虑的众多极端的网络故障场景之一。
+>
+> 我认为这个问题是可修复的。我们可以通过一个双向的HeartBeat来解决这里的问题。在这个双向的HeartBeat中，Leader发出HeartBeat，但是这时Followers需要以某种形式响应这个HeartBeat。如果Leader一段时间没有收到自己发出HeartBeat的响应，Leader会决定卸任，这样我认为可以解决这个特定的问题和一些其他的问题。
+>
+> 你是对的，网络中可能发生非常奇怪的事情，而Raft协议没有考虑到这些场景。
+
+所以，我们这里有Leader选举，我们需要确保每个任期最多只有一个Leader。Raft是如何做到这一点的呢？
+
+为了能够当选，Raft要求一个候选人从过半服务器中获得认可投票。每个Raft节点，只会在一个任期内投出一个认可选票。这意味着，在任意一个任期内，每一个节点只会对一个候选人投一次票。这样，就不可能有两个候选人同时获得过半的选票，因为每个节点只会投票一次。所以这里是过半原则导致了最多只能有一个胜出的候选人，这样我们在每个任期会有最多一个选举出的候选人。
+
+当一个服务器赢得了一次选举，这个服务器会收到过半的认可投票，这个服务器会直接知道自己是新的Leader，然后通过HeartBeat通知其他服务器。Raft规定，除非是当前任期的Leader，没人可以发出AppendEntries消息。所以，其他服务器通过接收特定任期号的AppendEntries来知道，选举成功了。
+
+## 6.8 选举定时器
+
+**任何一条AppendEntries消息都会重置所有Raft节点的选举定时器**。所以只要所有环节都在正常工作，不断重复的HeartBeat会阻止任何新的选举发生。当然，如果网络故障或者发生了丢包，不可避免的还是会有新的选举。
+
+如果一次选举选出了0个Leader，这次选举就失败了，这时什么事也不会发生。
+
+一个导致选举失败的更有趣的场景是，当所有环节都在正常工作，没有故障，没有丢包，但是候选人们几乎是同时参加竞选，它们分割了选票（Split Vote）。假设我们有一个3节点的多副本系统，3个节点的选举定时器几乎同超时，进而期触发选举。3个节点中的每个节点都只能收到一张投票（来自于自己）。没有一个节点获得了过半投票，所以也就没有人能被选上。接下来它们的选举定时器会重新计时，因为选举定时器只会在收到了AppendEntries消息时重置，但是由于没有Leader，所有也就没有AppendEntries消息。所有的选举定时器重新开始计时，如果我们不够幸运的话，所有的定时器又会在同一时间到期，所有节点又会投票给自己，又没有人获得了过半投票，这个状态可能会一直持续下去。
+
+Raft不能完全避免分割选票（Split Vote），但是可以通过为选举定时器随机选择超时时间来尽可能避免这一情况。
+
+一个明显的要求是，**选举定时器的超时时间需要至少大于Leader的HeartBeat间隔**。**实际上由于网络可能丢包，这里你或许希望将下限设置为多个HeartBeat间隔**。
+
+那超时时间的上限呢？
+
+首先，这里的**最大超时时间影响了系统能多快从故障中恢复**。因为从旧的Leader故障开始，到新的选举开始这段时间，整个系统是瘫痪了。尽管还有一些其他服务器在运行，但是因为没有Leader，客户端请求会被丢弃。如果故障很频繁，那么我们或许就该关心恢复时间有多长。
+
+另一个需要考虑的点是，不同节点的选举定时器的超时时间差（S2和S3之间）必须要足够长，使得第一个开始选举的节点能够完成一轮选举。这里至少需要大于发送一条RPC所需要的往返（Round-Trip）时间。
+
+或许需要10毫秒来发送一条RPC，并从其他所有服务器获得响应。如果这样的话，我们需要设置超时时间的上限到足够大，从而使得两个随机数之间的时间差极有可能大于10毫秒。
+
+**在Lab2中，如果你的代码不能在几秒内从一个Leader故障的场景中恢复的话，测试代码会报错。所以这种场景下，你们需要调小选举定时器超时时间的上限。这样的话，你才可能在几秒内完成一次Leader选举。这并不是一个很严格的限制。**
+
+**每一次一个节点重置自己的选举定时器时，都需要重新选择一个随机的超时时间。**
+
+## 6.9 可能的异常情况
+
+一个旧Leader在各种奇怪的场景下故障之后，为了恢复系统的一致性，一个新任的Leader如何能整理在不同副本上可能已经不一致的Log？
+
+这个话题只在Leader故障之后才有意义。例如，旧的Leader在发送消息的过程中故障了，或者新Leader在刚刚当选之后，还没来得及做任何操作就故障了。
+
+这里有个例子，假设我们有3个服务器（S1，S2，S3），我将写出每个服务器的Log，每一列对齐之后就是Log的一个槽位。我这里写的值是Log条目对应的任期号，而不是Log记录的客户端请求。所有节点在任期3的时候记录了一个请求在槽位1，S2和S3在任期3的时候记录了一个请求在槽位2。在槽位2，S1没有任何记录。 
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBP2JO7CY5oyh7Mgxqq%2F-MBQw0qVBbS6oFTd7rZb%2Fimage.png)
+
+这种情况是可能发生的。假设S3是任期3的Leader，它收到了一个客户端请求，之后发送给其他服务器。其他服务器收到了相应的AppendEntries消息，并添加Log到本地，这是槽位1的情况。之后，S3从客户端收到了第二个请求，它还是需要将这个请求发送给其他服务器。但是这里有三种情况：
+
+1. 发送给S1的消息丢了
+2. S1当时已经关机了
+3. S3在向S2发送完AppendEntries之后，在向S1发送AppendEntries之前故障了
+
+现在，只有S2和S3有槽位2的Log。
+
+如果现任Leader S3故障了，首先我们需要新的选举，之后某个节点会被选为新的Leader。接下来会发生两件事情：
+
+1. 新的Leader需要认识到，槽位2的请求可能已经commit了，从而不能丢弃。
+2. 新的Leader需要确保S1在槽位2记录与其他节点完全一样的请求。
+
+这里还有另外一个例子需要考虑。还是3个服务器，这里有槽位10、11、12、13。槽位10和槽位11类似于前一个例子。在槽位12，S2有一个任期4的请求，而S3有一个任期5的请求。这种场景可能发生吗？
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBP2JO7CY5oyh7Mgxqq%2F-MBR-3wdLZal8v1Qwl5G%2Fimage.png)
+
+这种场景是可能发生的。我们假设S2在槽位12时，是任期4的新Leader，它收到了来自客户端的请求，将这个请求加到了自己的Log中，然后就故障了。
+
+因为Leader故障了，我们需要一次新的选举。我们来看哪个服务器可以被选为新的Leader。这里S3可能被选上，因为它只需要从过半服务器获得认可投票，而在这个场景下，过半服务器就是S1和S3。所以S3可能被选为任期5的新Leader，之后收到了来自客户端的请求，将这个请求加到自己的Log中，然后故障了。之后就到了例子中的场景了。
+
+因为可能发生，Raft必须能够处理这种场景。我们知道在槽位10的Log，3个副本都有记录，它**可能**已经commit了，所以我们不能丢弃它。类似的在槽位11的Log，因为它被过半服务器记录了，它也可能commit了，所以我们也不能丢弃它。在槽位12记录的两个Log（分别是任期4和任期5），都没有被commit，所以Raft可以丢弃它们。这**里没有要求必须都丢弃它们，但是至少需要丢弃一个Log，因为最终你还是要保持多个副本之间的Log一致。**
+
+# Lecture 07 - Raft2
+
+## 7.1 日志恢复
+
+假设S3在任期6被选为Leader。在某个时刻，新Leader S3会发送任期6的第一个AppendEntries RPC，来传输任期6的第一个Log。
+
+这里的AppendEntries消息实际上有两条，因为要发给两个Followers。它们包含了客户端发送给Leader的请求。我们现在想将这个请求复制到所有的Followers上。**这里的AppendEntries RPC还包含了prevLogIndex字段和prevLogTerm字段**。所以Leader在发送AppendEntries消息时，会附带前一个槽位的信息。在我们的场景中，prevLogIndex是前一个槽位的位置，也就是12；prevLogTerm是S3上前一个槽位的任期号，也就是5。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBRbv-a5MbeIrL0QDVS%2F-MBRg4L_2lMmZBXh8Ous%2Fimage.png)
+
+Followers在收到AppendEntries消息时，可以知道它们收到了一个带有若干Log条目的消息，并且是从槽位13开始。**Followers在写入Log之前，会检查本地的前一个Log条目，是否与Leader发来的有关前一条Log的信息匹配。**
+
+所以对于S2 它显然是不匹配的。S2 在槽位12已经有一个条目，但是它来自任期4，而不是任期5。所以S2将拒绝这个AppendEntries，并返回False给Leader。S1在槽位12还没有任何Log，所以S1也将拒绝Leader的这个AppendEntries。所以Leader看到了两个拒绝。
+
+**Leader为每个Follower维护了nextIndex**。所以它有一个S2的nextIndex，还有一个S1的nextIndex。这意味着Leader对于其他两个服务器的nextIndex都是13。这种情况发生在Leader刚刚当选，因为Raft论文规定了，nextIndex的初始值是从新任Leader的最后一条日志开始。
+
+**为了响应Followers返回的拒绝，Leader会减小对应的nextIndex**。所以它现在减小了两个Followers的nextIndex。这一次，Leader发送的AppendEntries消息中，prevLogIndex等于11，prevLogTerm等于3。**同时，这次Leader发送的AppendEntries消息包含了prevLogIndex之后的所有条目**，也就是S3上槽位12和槽位13的Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBRljzYEgVezZRH2cVm%2F-MBSjOijBYyB8FT_B2FY%2Fimage.png)
+
+对于S2来说，这次收到的AppendEntries消息中，prevLogIndex等于11，prevLogTerm等于3，与自己本地的Log匹配，所以，S2会接受这个消息。Raft论文中的图2规定，如果接受一个AppendEntries消息，那么需要首先删除本地相应的Log（如果有的话），再用AppendEntries中的内容替代本地Log。所以，S2会这么做：它会删除本地槽位12的记录，再添加AppendEntries中的Log条目。这个时候，S2的Log与S3保持了一致。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBRljzYEgVezZRH2cVm%2F-MBSliQIKThBT1WjnQr9%2Fimage.png)
+
+但是，S1仍然有问题，因为它的槽位11是空的，所以它不能匹配这次的AppendEntries。它将再次返回False。而Leader会将S1对应的nextIndex变为11，并在AppendEntries消息中带上从槽位11开始之后的Log（也就是槽位11，12，13对应的Log）。并且带上相应的prevLogIndex（10）和prevLogTerm（3）。
+
+这次的请求可以被S1接受，并得到肯定的返回。现在它们都有了一致的Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBRljzYEgVezZRH2cVm%2F-MBSmmPN7PxlIL_Ym48l%2Fimage.png)
+
+而Leader在收到了Followers对于AppendEntries的肯定的返回之后，**它会增加相应的nextIndex到14**。 
+
+**在这里，Leader使用了一种备份机制来探测Followers的Log中，第一个与Leader的Log相同的位置。在获得位置之后，Leader会给Follower发送从这个位置开始的，剩余的全部Log。经过这个过程，所有节点的Log都可以和Leader保持一致。**
+
+## 7.2 选举约束
+
+为了保证系统的正确性，并非任意节点都可以成为Leader。不是说第一个选举定时器超时了并触发选举的节点，就一定是Leader。Raft对于谁可以成为Leader，谁不能成为Leader是有一些限制的。
+
+下面证明并非任意节点都可以成为Leader。在这个反例中，Raft会选择拥有最长Log记录的节点作为Leader，这个规则或许适用于其他系统，实际上在一些其他设计的系统中的确使用了这样的规则，但是在Raft中，这条规则不适用。所以，我们这里需要研究的问题是：为什么不选择拥有最长Log记录的节点作为Leader？
+
+很容易可以展示为什么这是一个错误的观点。我们还是假设我们有3个服务器，现在服务器1（S1）有任期5，6，7的Log，服务器2和服务器3（S2和S3）有任期5，8的Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBU-cLGzrm5ZAw-M4Lb%2F-MBW_OcVeCVhg2L3q6KY%2Fimage.png)
+
+这个场景可能出现吗？让我们回退一些时间，在这个时间点S1赢得了选举，现在它的任期号是6。它收到了一个客户端请求，在发出AppendEntries之前，它先将请求存放在自己的Log中，然后它就故障了，所以它没能发出任何AppendEntries消息。
+
+之后它很快就故障重启了，因为它是之前的Leader，所以会有一场新的选举。这次，它又被选为Leader。然后它收到了一个任期7的客户端请求，将这个请求加在本地Log之后，它又故障了。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBU-cLGzrm5ZAw-M4Lb%2F-MBWaoJSRdRe5NZLD5q6%2Fimage.png)
+
+S1故障之后，我们又有了一次新的选举，这时S1已经关机了，不能再参加选举，这次S2被选为Leader。如果S2当选，而S1还在关机状态，S2会使用什么任期号呢？
+
+明显我们的答案是8。尽管没有写在黑板上，但是S1在任期6，7能当选，它必然拥有了过半节点的投票，过半服务器至少包含了S2，S3中的一个节点。当某个节点为候选人投票时，节点应该将候选人的任期号记录在持久化存储中。因此，当S1故障了，它们中至少一个知道当前的任期是8。**这里，只有知道了任期8的节点才有可能当选，如果只有一个节点知道，那么这个节点会赢得选举，因为它拥有更高的任期号**。所以我们现在有了这么一个场景。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBU-cLGzrm5ZAw-M4Lb%2F-MBWdJ_lN3OZSailEx6z%2Fimage.png)
+
+现在我们回到对于这个场景的最初的问题，假设S1重新上线了，并且我们又有了一次新的选举，这时候可以选择拥有最长Log记录的节点作为Leader可以吗？明显，答案是不可以的。最短Log记录的节点也不行。
+
+Raft有一个稍微复杂的选举限制（Election Restriction）。这个限制要求，在处理别节点发来的RequestVote RPC时，需要做一些检查才能投出赞成票。节点只能向满足下面条件之一的候选人投出赞成票：
+
+1. 候选人最后一条Log条目的任期号**大于**本地最后一条Log条目的任期号；
+2. 候选人最后一条Log条目的任期号**等于**本地最后一条Log条目的任期号，且候选人的Log记录长度**大于等于**本地Log记录的长度
+
+如果S2或者S3成为了候选人，它们中的另一个都会投出赞成票，因为它们最后的任期号一样，并且它们的Log长度大于等于彼此（满足限制2）。所以S2或者S3中的任意一个都会为另一个投票。S1会为它们投票吗？会的，因为S2或者S3最后一个Log条目对应的任期号更大（满足限制1）。
+
+## 7.3 快速恢复
+
+在日志恢复机制中，如果Log有冲突，Leader每次会回退一条Log条目。 这在许多场景下都没有问题。但是在某些现实的场景中，至少在Lab2的测试用例中，每次只回退一条Log条目会花费很长很长的时间。所以，现实的场景中，可能一个Follower关机了很长时间，错过了大量的AppendEntries消息（比如1000条Log条目）。Leader重启之后，需要每次通过一条RPC来回退一条Log条目来遍历1000条Follower错过的Log记录。在一些不正常的场景中，假设我们有5个服务器，有1个Leader，这个Leader和另一个Follower困在一个网络分区。但是这个Leader并不知道它已经不再是Leader了。它还是会向它唯一的Follower发送AppendEntries，因为这里没有过半服务器，所以没有一条Log会commit。在另一个有多数服务器的网络分区中，系统选出了新的Leader并继续运行。旧的Leader和它的Follower可能会记录无限多的旧的任期的未commit的Log。当旧的Leader和它的Follower重新加入到集群中时，这些Log需要被删除并覆盖。你会在Lab2的测试用例中发现这个场景。
+
+所以，为了能够更快的恢复日志，Raft让Follower返回足够的信息给Leader，这样Leader可以以任期（Term）为单位来回退，而不用每次只回退一条Log条目。所以现在，如果Leader和Follower的Log不匹配，Leader只需要对每个不同的任期发送一条AppendEntries。
+
+我将可能出现的场景分成3类，为了简化，这里只画出一个Leader（S2）和一个Follower（S1），S2将要发送一条任期号为6的AppendEntries消息给Follower。
+
+场景1：S1没有任期6的任何Log，因此我们需要回退一整个任期的Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBWkN9UEymsb5c7j841%2F-MBYLa_4jqgsM8DaVT6N%2Fimage.png)
+
+场景2：S1收到了任期4的旧Leader的多条Log，但是作为新Leader，S2只收到了一条任期4的Log。所以这里，我们需要覆盖S1中有关旧Leader的一些Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBWkN9UEymsb5c7j841%2F-MBYNH4J5ALQlxwSXW6I%2Fimage.png)
+
+场景3：S1与S2的Log不冲突，但是S1缺失了部分S2中的Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBWkN9UEymsb5c7j841%2F-MBYO7_E7HYrvei4rj8_%2Fimage.png)
+
+可以让Follower在回复Leader的AppendEntries消息中，携带3个额外的信息，来加速日志的恢复。这里的回复是指，Follower因为Log信息不匹配，拒绝了Leader的AppendEntries之后的回复。这里的三个信息是指：
+
+1. XTerm：这个是Follower中与Leader冲突的Log对应的任期号。在之前（7.1）有介绍Leader会在prevLogTerm中带上本地Log记录中，前一条Log的任期号。如果Follower在对应位置的任期号不匹配，它会拒绝Leader的AppendEntries消息，并将自己的任期号放在XTerm中。如果Follower在对应位置没有Log，那么这里会返回 -1。
+2. XIndex：这个是Follower中，对应任期号为XTerm的第一条Log条目的槽位号。
+3. XLen：如果Follower在对应位置没有Log，那么XTerm会返回-1，XLen表示空白的Log槽位数。
+
+我们再来看这些信息是如何在上面3个场景中，帮助Leader快速回退到适当的Log条目位置。
+
+场景1。Follower（S1）会返回XTerm=5，XIndex=2。如果Leader完全没有XTerm的任何Log，那么它应该回退到XIndex对应的位置（这样，Leader发出的下一条AppendEntries就可以一次覆盖S1中所有XTerm对应的Log）。
+
+场景2。Follower（S1）会返回XTerm=4，XIndex=1。Leader（S2）发现自己其实有任期4的日志，它会将自己本地记录的S1的nextIndex设置到本地在XTerm位置的Log条目后面，也就是槽位2。下一次Leader发出下一条AppendEntries时，就可以一次覆盖S1中槽位2和槽位3对应的Log。
+
+场景3。Follower（S1）会返回XTerm=-1，XLen=2。这表示S1中日志太短了，以至于在冲突的位置没有Log条目，Leader应该回退到Follower最后一条Log条目的下一条，也就是槽位2，并从这开始发送AppendEntries消息。槽位2可以从XLen中的数值计算得到。
+
+> 学生提问：能在解释一下这里的流程吗？
+>
+> Robert教授：这里，Leader发现冲突的方法在于，Follower会返回它从冲突条目中看到的任期号（XTerm）。在场景1中，Follower会设置XTerm=5，因为这是有冲突的Log条目对应的任期号。Leader会发现，哦，我的Log中没有任期5的条目。因此，在场景1中，Leader会一次性回退到Follower在任期5的起始位置。因为Leader并没有任何任期5的Log，所以它要删掉Follower中所有任期5的Log，这通过回退到Follower在任期5的第一条Log条目的位置，也就是XIndex达到的。
+
+## 7.4 持久化
+
+下一个我想介绍的是持久化存储（persistence）。你可以从Raft论文的图2的左上角看到，有些数据被标记为持久化的（Persistent），有些信息被标记为非持久化的（Volatile）。持久化和非持久化的区别只在服务器重启时重要。当你更改了被标记为持久化的某个数据，服务器应该将更新写入到磁盘，或者其它的持久化存储中，例如一个电池供电的RAM。持久化的存储可以确保当服务器重启时，服务器可以找到相应的数据，并将其加载到内存中。这样可以使得服务器在故障并重启后，继续重启之前的状态。
+
+你或许会认为，如果一个服务器故障了，那简单直接的方法就是将它从集群中摘除。我们需要具备从集群中摘除服务器，替换一个全新的空的服务器，并让该新服务器在集群内工作的能力。实际上，这是至关重要的，因为如果一些服务器遭受了不可恢复的故障，例如磁盘故障，你绝对需要替换这台服务器。同时，如果磁盘故障了，你也不能指望能从该服务器的磁盘中获得任何有用的信息。所以我们的确需要能够用全新的空的服务器替代现有服务器的能力。你或许认为，这就足以应对任何出问题的场景了，但实际上不是的。
+
+实际上，一个常见的故障是断电。断电的时候，整个集群都同时停止运行，这种场景下，我们不能通过从Dell买一些新的服务器来替换现有服务器进而解决问题。这种场景下，如果我们希望我们的服务是容错的， 我们需要能够得到之前状态的拷贝，这样我们才能保持程序继续运行。因此，至少为了处理同时断电的场景，我们不得不让服务器能够将它们的状态存储在某处，这样当供电恢复了之后，还能再次获取这个状态。这里的状态是指，为了让服务器在断电或者整个集群断电后，能够继续运行所必不可少的内容。这是理解持久化存储的一种方式。
+
+在Raft论文的图2中，有且仅有三个数据是需要持久化存储的。它们分别是Log、currentTerm、votedFor。Log是所有的Log条目。当某个服务器刚刚重启，在它加入到Raft集群之前，它必须要检查并确保这些数据有效的存储在它的磁盘上。服务器必须要有某种方式来发现，自己的确有一些持久化存储的状态，而不是一些无意义的数据。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBYxFoDIpfYiSblbIwa%2F-MBfXoF-HOhQM8ZELAoC%2Fimage.png)
+
+Log需要被持久化存储的原因是，这是唯一记录了应用程序状态的地方。Raft论文图2并没有要求我们持久化存储应用程序状态。假如我们运行了一个数据库或者为VMware FT运行了一个Test-and-Set服务，根据Raft论文图2，实际的数据库或者实际的test-set值，并不会被持久化存储，只有Raft的Log被存储了。所以当服务器重启时，唯一能用来重建应用程序状态的信息就是存储在Log中的一系列操作，所以Log必须要被持久化存储。
+
+那currentTerm呢？为什么currentTerm需要被持久化存储？是的，currentTerm和votedFor都是用来确保每个任期只有最多一个Leader。在一个故障的场景中，如果一个服务器收到了一个RequestVote请求，并且为服务器1投票了，之后它故障。如果它没有存储它为哪个服务器投过票，当它故障重启之后，收到了来自服务器2的同一个任期的另一个RequestVote请求，那么它还是会投票给服务器2，因为它发现自己的votedFor是空的，因此它认为自己还没投过票。现在这个服务器，在同一个任期内同时为服务器1和服务器2投了票。因为服务器1和服务器2都会为自己投票，它们都会认为自己有过半选票（3票中的2票），那它们都会成为Leader。现在同一个任期里面有了两个Leader。这就是为什么votedFor必须被持久化存储。
+
+currentTerm的情况要更微妙一些，但是实际上还是为了实现一个任期内最多只有一个Leader，我们之前实际上介绍过这里的内容。如果（重启之后）我们不知道任期号是什么，很难确保一个任期内只有一个Leader。 
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBYxFoDIpfYiSblbIwa%2F-MBfZw6jU_SKyHDJS7-d%2Fimage.png)
+
+在这里例子中，S1关机了，S2和S3会尝试选举一个新的Leader。它们需要证据证明，正确的任期号是8，而不是6。如果仅仅是S2和S3为彼此投票，它们不知道当前的任期号，它们只能查看自己的Log，它们或许会认为下一个任期是6（因为Log里的上一个任期是5）。如果它们这么做了，那么它们会从任期6开始添加Log。但是接下来，就会有问题了，因为我们有了两个不同的任期6（另一个在S1中）。这就是为什么currentTerm需要被持久化存储的原因，因为它需要用来保存已经被使用过的任期号。
+
+这些数据需要在每次你修改它们的时候存储起来。所以可以确定的是，安全的做法是每次你添加一个Log条目，更新currentTerm或者更新votedFor，你或许都需要持久化存储这些数据。在一个真实的Raft服务器上，这意味着将数据写入磁盘，所以你需要一些文件来记录这些数据。如果你发现，直到服务器与外界通信时，才有可能持久化存储数据，那么你可以通过一些批量操作来提升性能。例如，只在服务器回复一个RPC或者发送一个RPC时，服务器才进行持久化存储，这样可以节省一些持久化存储的操作。
+
+之所以这很重要是因为，向磁盘写数据是一个代价很高的操作。如果是一个机械硬盘，我们通过写文件的方式来持久化存储，向磁盘写入任何数据都需要花费大概10毫秒时间。因为你要么需要等磁盘将你想写入的位置转到磁针下面， 而磁盘大概每10毫秒转一次。要么，就是另一种情况更糟糕，磁盘需要将磁针移到正确的轨道上。所以这里的持久化操作的代价可能会非常非常高。对于一些简单的设计，这些操作可能成为限制性能的因素，因为它们意味着在这些Raft服务器上执行任何操作，都需要10毫秒。而10毫秒相比发送RPC或者其他操作来说都太长了。如果你持久化存储在一个机械硬盘上，那么每个操作至少要10毫秒，这意味着你永远也不可能构建一个每秒能处理超过100个请求的Raft服务。这就是所谓的synchronous disk updates的代价。它存在于很多系统中，例如运行在你的笔记本上的文件系统。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBYxFoDIpfYiSblbIwa%2F-MBfbcygvby5DfEXtOnW%2Fimage.png)
+
+设计人员花费了大量的时间来避开synchronous disk updates带来的性能问题。为了让磁盘的数据保证安全，同时为了能安全更新你的笔记本上的磁盘，文件系统对于写入操作十分小心，有时需要等待磁盘（前一个）写入完成。所以这（优化磁盘写入性能）是一个出现在所有系统中的常见的问题，也必然出现在Raft中。
+
+如果你想构建一个能每秒处理超过100个请求的系统，这里有多个选择。其中一个就是，你可以使用SSD硬盘，或者某种闪存。SSD可以在0.1毫秒完成对于闪存的一次写操作，所以这里性能就提高了100倍。更高级一点的方法是，你可以构建一个电池供电的DRAM，然后在这个电池供电的DRAM中做持久化存储。这样，如果Server重启了，并且重启时间短于电池的可供电时间，这样你存储在RAM中的数据还能保存。如果资金充足，且不怕复杂的话，这种方式的优点是，你可以每秒写DRAM数百万次，那么持久化存储就不再会是一个性能瓶颈。所以，synchronous disk updates是为什么数据要区分持久化和非持久化（而非所有的都做持久化）的原因（越少数据持久化，越高的性能）。Raft论文图2考虑了很多性能，故障恢复，正确性的问题。
+
+有任何有关持久化存储的问题吗？
+
+> 学生提问：当你写你的Raft代码时，你实际上需要确认，当你持久化存储一个Log或者currentTerm，这些数据是否实时的存储在磁盘中，你该怎么做来确保它们在那呢？
+>
+> Robert教授：在一个UNIX或者一个Linux或者一个Mac上，为了调用系统写磁盘的操作，你只需要调用write函数，在write函数返回时，并不能确保数据存在磁盘上，并且在重启之后还存在。几乎可以确定（write返回之后）数据不会在磁盘上。所以，如果在UNIX上，你调用了write，将一些数据写入之后，你需要调用fsync。在大部分系统上，fsync可以确保在返回时，所有之前写入的数据已经安全的存储在磁盘的介质上了。之后，如果机器重启了，这些信息还能在磁盘上找到。fsync是一个代价很高的调用，这就是为什么它是一个独立的函数，也是为什么write不负责将数据写入磁盘，fsync负责将数据写入磁盘。因为写入磁盘的代价很高，你永远也不会想要执行这个操作，除非你想要持久化存储一些数据。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBfeVmGeTwYPn6bU6va%2F-MBfeXInUn6iyXMKSz5a%2Fimage.png)
+
+所以你可以使用一些更贵的磁盘。另一个常见方法是，批量执行操作。如果有大量的客户端请求，或许你应该同时接收它们，但是先不返回。等大量的请求累积之后，一次性持久化存储（比如）100个Log，之后再发送AppendEntries。如果Leader收到了一个客户端请求，在发送AppendEntries RPC给Followers之前，必须要先持久化存储在本地。因为Leader必须要commit那个请求，并且不能忘记这个请求。实际上，在回复AppendEntries 消息之前，Followers也需要持久化存储这些Log条目到本地，因为它们最终也要commit这个请求，它们不能因为重启而忘记这个请求。
+
+最后，有关持久化存储，还有一些细节。有些数据在Raft论文的图2中标记为非持久化的。所以，这里值得思考一下，为什么服务器重启时，commitIndex、lastApplied、nextIndex、matchIndex，可以被丢弃？例如，lastApplied表示当前服务器执行到哪一步，如果我们丢弃了它的话，我们需要重复执行Log条目两次（重启前执行过一次，重启后又要再执行一次），这是正确的吗？为什么可以安全的丢弃lastApplied？
+
+这里综合考虑了Raft的简单性和安全性。之所以这些数据是非持久化存储的，是因为Leader可以通过检查自己的Log和发送给Followers的AppendEntries的结果，来发现哪些内容已经commit了。如果因为断电，所有节点都重启了。Leader并不知道哪些内容被commit了，哪些内容被执行了。但是当它发出AppendEntries，并从Followers搜集回信息。它会发现，Followers中有哪些Log与Leader的Log匹配，因此也就可以发现，在重启前，有哪些被commit了。
+
+另外，Raft论文的图2假设，应用程序状态会随着重启而消失。所以图2认为，既然Log已经持久化存储了，那么应用程序状态就不必再持久化存储。因为在图2中，Log从系统运行的初始就被持久化存储下来。所以，当Leader重启时，Leader会从第一条Log开始，执行每一条Log条目，并提交给应用程序。所以，重启之后，应用程序可以通过重复执行每一条Log来完全从头构建自己的状态。这是一种简单且优雅的方法，但是很明显会很慢。这将会引出我们的下一个话题：Log compaction和Snapshot。
+
+## 7.5 日志快照
+
+Log压缩和快照（Log compaction and snapshots）在Lab3b中出现的较多。在Raft中，Log压缩和快照解决的问题是：对于一个长期运行的系统，例如运行了几周，几个月甚至几年，如果我们按照Raft论文图2的规则，那么Log会持续增长。最后可能会有数百万条Log，从而需要大量的内存来存储。如果持久化存储在磁盘上，最终会消耗磁盘的大量空间。如果一个服务器重启了，它需要通过重新从头开始执行这数百万条Log来重建自己的状态。当故障重启之后，遍历并执行整个Log的内容可能要花费几个小时来完成。这在某种程度上来说是浪费，因为在重启之前，服务器已经有了一定的应用程序状态。
+
+为了应对这种场景，Raft有了快照（Snapshots）的概念。快照背后的思想是，要求应用程序将其状态的拷贝作为一种特殊的Log条目存储下来。我们之前几乎都忽略了应用程序，但是事实是，假设我们基于Raft构建一个key-value数据库，Log将会包含一系列的Put/Get或者Read/Write请求。假设一条Log包含了一个Put请求，客户端想要将X设置成1，另一条Log想要将X设置成2，下一条将Y设置成7。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBk_n7kz7LwWmljK4YM%2Fimage.png)
+
+如果Raft一直执行没有故障，Raft之上的将会是应用程序，在这里，应用程序将会是key-value数据库。它将会维护一个表单，当Raft一个接一个的上传命令时，应用程序会更新它的表单。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkaBQ8jRnWmCdeGiD8%2Fimage.png)
+
+所以第一个命令之后，应用程序会将表单中的X设置为1。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkaI_QBNIh1ptm_rOQ%2Fimage.png)
+
+第二个命令之后，表单中的X会被设置为2。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkaQ-IlP53SOYCjZ_e%2Fimage.png)
+
+第三个命令之后，表单中的Y会被设置为7。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkaX1bvktd71PjL49f%2Fimage.png)
+
+这里有个有趣的事实，那就是：对于大多数的应用程序来说，应用程序的状态远小于Log的大小。某种程度上我们知道，在某些时间点，Log和应用程序的状态是可以互换的，它们是用来表示应用程序状态的不同事物。但是Log可能包含大量的重复的记录（例如对于X的重复赋值），这些记录使用了Log中的大量的空间，但是同时却压缩到了key-value表单中的一条记录。这在多副本系统中很常见。在这里，如果存储Log，可能尺寸会非常大，相应的，如果存储key-value表单，这可能比Log尺寸小得多。这就是快照的背后原理。
+
+所以，当Raft认为它的Log将会过于庞大，例如大于1MB，10MB或者任意的限制，Raft会要求应用程序在Log的特定位置，对其状态做一个快照。所以，如果Raft要求应用程序做一个快照，Raft会从Log中选取一个与快照对应的点，然后要求应用程序在那个点的位置做一个快照。这里极其重要，因为我们接下来将会丢弃所有那个点之前的Log记录。如果我们有一个点的快照，那么我们可以安全的将那个点之前的Log丢弃。（在key-value数据库的例子中）快照本质上就是key-value表单。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkc760GDzLO6jUOHMz%2Fimage.png)
+
+我们还需要为快照标注Log的槽位号。在这个图里面，这个快照对应的正好是槽位3。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkcLXLRH2lcTUzk1_M%2Fimage.png)
+
+有了快照，并且Raft将它存放在磁盘中之后，Raft将不会再需要这部分Log。只要Raft持久化存储了快照，快照对应的Log槽位号，以及Log槽位号之后的所有Log，那么快照对应槽位号之前的这部分Log可以被丢弃，我们将不再需要这部分Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkciXeDWIwbUURR0LQ%2Fimage.png)
+
+所以这就是Raft快照的工作原理，Raft要求应用程序做快照，得到快照之后将其存储在磁盘中，同时持久化存储快照之后的Log，并丢弃快照之前的Log。所以，Raft的持久化存储实际上是持久化应用程序快照，和快照之后的Log。大家都明白了吗？
+
+> 学生提问：听不清。
+>
+> Robert教授：或许可以这样看这些Log，快照之后的Log是实际存在的，而快照之前的Log可以认为是幽灵条目，我们可以认为它们还在那，只是说我们永远不会再去查看它们了， 因为我们现在有快照了。事实上，我们不再存储幽灵条目，但是效果上是等效于有完整的Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkdkQXN-cSeEzmGYvC%2Fimage.png)
+
+刚刚的回答可能有些草率。因为如果按照Raft论文的图2，你有时还是需要这些早期的Log（槽位1，2，3）。所以，在知道了有时候某些Log可能不存在的事实之后，你可能需要稍微重新理解一下图2。
+
+所以，重启的时候会发生什么呢？现在，重启的场景比之前只有Log会更加复杂一点。重启的时候，必须让Raft有方法知道磁盘中最近的快照和Log的组合，并将快照传递给应用程序。因为现在我们不能重演所有的Log（部分被删掉了），所以必须要有一种方式来初始化应用程序。所以应用程序不仅需要有能力能生成一个快照，它还需要能够吸纳一个之前创建的快照，并通过它稳定的重建自己的内存。所以，尽管Raft在管理快照，快照的内容实际上是应用程序的属性。Raft并不理解快照中有什么，只有应用程序知道，因为快照里面都是应用程序相关的信息。所以重启之后，应用程序需要能够吸纳Raft能找到的最近的一次快照。到目前为止还算简单。
+
+不幸的是，这里丢弃了快照之前的Log，引入了大量的复杂性。如果有的Follower的Log较短，在Leader的快照之前就结束，那么除非有一种新的机制，否则那个Follower永远也不可能恢复完整的Log。因为，如果一个Follower只有前两个槽位的Log，Leader不再有槽位3的Log可以通过AppendEntries RPC发给Follower，Follower的Log也就不可能补齐至Leader的Log。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkfNX7DuPzSXWYBees%2Fimage.png)
+
+我们可以通过这种方式来避免这个问题：如果Leader发现有任何一个Follower的Log落后于Leader要做快照的点，那么Leader就不丢弃快照之前的Log。Leader原则上是可以知道Follower的Log位置，然后Leader可以不丢弃所有Follower中最短Log之后的本地Log。
+
+这或许是一个短暂的好方法，之所以这个方法不完美的原因在于，如果一个Follower关机了一周，它也就不能确认Log条目，同时也意味着Leader不能通过快照来减少自己的内存消耗（因为那个Follower的Log长度一直没有更新）。
+
+所以，Raft选择的方法是，Leader可以丢弃Follower需要的Log。所以，我们需要某种机制让AppendEntries能处理某些Follower Log的结尾到Leader Log开始之间丢失的这一段Log。解决方法是（一个新的消息类型）InstallSnapshot RPC。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkgdpWc6o9N1ljBqyW%2Fimage.png)
+
+当Follower刚刚恢复，如果它的Log短于Leader通过 AppendEntries RPC发给它的内容，那么它首先会强制Leader回退自己的Log。在某个点，Leader将不能再回退，因为它已经到了自己Log的起点。这时，Leader会将自己的快照发给Follower，之后立即通过AppendEntries将后面的Log发给Follower。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkh5AvyjTB3cxxLO6Y%2Fimage.png)
+
+不幸的是，这里明显的增加了的复杂度。因为这里需要Raft组件之间的协同，这里还有点违反模块性，因为这里需要组件之间有一些特殊的协商。例如，当Follower收到了InstallSnapshot，这个消息是被Raft收到的，但是Raft实际需要应用程序能吸纳这个快照。所以它们现在需要更多的交互了。
+
+> 学生提问：快照的创建是否依赖应用程序？
+>
+> Robert教授：肯定依赖。快照生成函数是应用程序的一部分，如果是一个key-value数据库，那么快照生成就是这个数据库的一部分。Raft会通过某种方式调用到应用程序，通知应用程序生成快照，因为只有应用程序自己才知道自己的状态（进而能生成快照）。而通过快照反向生成应用程序状态的函数，同样也是依赖应用程序的。但是这里又有点纠缠不清，因为每个快照又必须与某个Log槽位号对应。
+>
+> 学生提问：如果RPC消息乱序该怎么处理？
+>
+> Robert教授：是在说Raft论文图13的规则6吗？这里的问题是，你们会在Lab3遇到这个问题，因为RPC系统不是完全的可靠和有序，RPC可以乱序的到达，甚至不到达。你或许发了一个RPC，但是收不到回复，并认为这个消息丢失了，但是消息实际上送达了，实际上是回复丢失了。所有这些都可能发生，包括发生在InstallSnapshot RPC中。Leader几乎肯定会并发发出大量RPC，其中包含了AppendEntries和InstallSnapshot，因此，Follower有可能受到一条很久以前的InstallSnapshot消息。因此，Follower必须要小心应对InstallSnapshot消息。我认为，你想知道的是，如果Follower收到了一条InstallSnapshot消息，但是这条消息看起来完全是冗余的，这条InstallSnapshot消息包含的信息比当前Follower的信息还要老，这时，Follower该如何做？
+>
+> Raft论文图13的规则6有相应的说明。我认为正常的响应是，Follower可以忽略明显旧的快照。其实我（Robert教授）看不懂那条规则6。
+
+## 7.6 线性一致
+
+接下来我们看一些更偏概念性的东西。目前为止，我们还没有尝试去确定正确意味着什么？当一个多副本服务或者任意其他服务正确运行意味着什么？ 绝大多数时候，我都避免去考虑太多有关正确的精确定义。但事实是，当你尝试去优化一些东西，或者当你尝试去想明白一些奇怪的corner case，如果有个正式的方式定义什么是正确的行为，经常会比较方便。例如，当客户端通过RPC发送请求给我们的多副本服务时，可能是请求重发，可能是服务故障重启正在加载快照，或者客户端发送了请求并且得到了返回，但是这个返回是正确的吗？我们该如何区分哪个返回是正确的？所以，我们需要一个非常正式的定义来区分，什么是对的，什么是错的。
+
+我们对于正确的定义就是线性一致（Linearizability）或者说强一致（Strong consistency）。通常来说，线性一致等价于强一致。一个服务是线性一致的，那么它表现的就像只有一个服务器，并且服务器没有故障，这个服务器每次执行一个客户端请求，并且没什么奇怪的是事情发生。
+
+一个系统的执行历史是一系列的客户端请求，或许这是来自多个客户端的多个请求。如果执行历史整体可以按照一个顺序排列，且排列顺序与客户端请求的实际时间相符合，那么它是线性一致的。当一个客户端发出一个请求，得到一个响应，之后另一个客户端发出了一个请求，也得到了响应，那么这两个请求之间是有顺序的，因为一个在另一个完成之后才开始。一个线性一致的执行历史中的操作是非并发的，也就是时间上不重合的客户端请求与实际执行时间匹配。并且，每一个读操作都看到的是最近一次写入的值。（这里的定义可能比较晦涩，后面会再通过例子展开介绍，并重新回顾这里定义里面的两个限制条件。）
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxqDeoO3mXvcO--tOE%2Fimage.png)
+
+首先，执行历史是对于客户端请求的记录，你可以从系统的输入输出理解这个概念，而不用关心内部是如何实现的。如果一个系统正在工作，我们可以通过输入输出的消息来判断，系统的执行顺序是不是线性一致的。接下来，我们通过两个例子来看，什么是线性一致的，什么不是。
+
+线性一致这个概念里面的操作，是从一个点开始，到另一个点结束。所以，这里前一个点对应了客户端发送请求，后一个点对应了收到回复的时间。我们假设，在某个特定的时间，客户端发送了请求，将X设置为1。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxsN599AxE_jlnhq09%2Fimage.png)
+
+过了一会，在第二条竖线处，客户端收到了一个回复。客户端在第一条竖线发送请求，在第二条竖线收到回复。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxsXboFlRytU4c3MYL%2Fimage.png)
+
+过了一会，这个客户端或者其他客户端再发送一个请求，要将X设置为2，并收到了相应的回复。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxsjtsbGkVi3Ouoat4%2Fimage.png)
+
+同时，某个客户端发送了一个读X的请求，得到了2。在第一条竖线发送读请求，在这个点，也就是第二条竖线，收到了值是2的响应。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxsuvCrxEINRD0hAgN%2Fimage.png)
+
+同时，还有一个读X的请求，得到值是1的响应。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxtHWPplv18PFyQpZG%2Fimage.png)
+
+如果我们观察到了这样的输入输出（执行历史），那么这样的执行历史是线性一致的吗？生成这样结果的系统，是一个线性一致的系统吗？或者系统在这种场景下，可以生成线性一致的执行历史吗？如果执行历史不是线性一致的，那么至少在Lab3，我们会有一些问题。所以，我们要分析并弄清楚，这里是不是线性一致的？
+
+要达到线性一致，我们需要为这里的4个操作生成一个线性一致的顺序。所以我们现在要确定顺序，对于这个顺序，有两个限制条件：
+
+1. 1.
+
+   如果一个操作在另一个操作开始前就结束了，那么这个操作必须在执行历史中出现在另一个操作前面。
+
+2. 2.
+
+   执行历史中，读操作，必须在相应的key的写操作之后。
+
+所以，这里我们要为4个操作创建一个顺序，两个读操作，两个写操作。我会通过箭头来标识刚刚两个限制条件，这样生成出来的顺序就能满足前面的限制条件。第一个写结束之后，第二个写才开始。所以一个限制条件是，在总的顺序中，第一个写操作必须在第二个写操作前面。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxuj0QuS4lgU9AIrqh%2Fimage.png)
+
+第一个读操作看到的是值2，那么在总的顺序中，这个读必然在第二个写操作后面，同时第二个写必须是离第一个读操作最近一次写。所以，这意味着，在总的顺序中，我们必须先看到对X写2，之后执行读X才能得到2。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxv5BNrj5Pl0UtfX36%2Fimage.png)
+
+第二个读X得到的是值1。我们假设X的值最开始不是1，那么会有下图的关系，因为读必须在写之后。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxvGj6mh2jYYTSidd-%2Fimage.png)
+
+第二个读操作必须在第二个写操作之前执行，这样写X为1的操作才能成为第二个读操作最近一次写操作。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxvXzYFoCU8PE5jk6z%2Fimage.png)
+
+或许还有一些其他的限制，但是不管怎样，我们将这些箭头展平成一个线性一致顺序来看看真实的执行历史，我们可以发现总的执行历史是线性一致的。首先是将X写1，之后是读X得到1，之后将X写2，之后读X得到2。（这里可以这么理解，左边是一个多副本系统的输入输出，因为分布式程序或者程序的执行，产生了这样的时序，但是在一个线性一致的系统中，实际是按照右边的顺序执行的操作。左边是实际时钟，右边是逻辑时钟。）
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxwGjVN52Eye42zgkF%2Fimage.png)
+
+所以这里有个顺序且符合前面两个限制条件，所以执行历史是线性一致的。如果我们关心一个系统是否是线性一致的，那么这个例子里面的输入输出至少与系统是线性一致的这个假设不冲突。
+
+> 学生提问：听不清。
+>
+> Robert教授：每个读操作，得到的值，都必须是顺序中的前一个写操作写入的值。在上面的例子中，这个顺序是没问题的，因为这里的读看到的值的确是前一个写操作。读操作不能获取旧的数据，如果我写了一些数据，然后读回来，那么我应该看到我写入的值。
+
+让我再写一个不是线性一致的例子。我们假设有一个将X写1的请求，另一个将X写2的请求，还有一些读操作。 
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxyZRS7QJZXkS4B2fY%2Fimage.png)
+
+这里我们也通过箭头来表示限制，最后得到相应的执行顺序。因为第一个写操作在第二个写操作开始之前就结束，在我们生成的顺序中，它必须在第二个写操作之前。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxyqQOfs5t8rwDm0D-%2Fimage.png)
+
+第二个写操作，写的值是2，所以必须在返回2的读操作之前，所以我们有了这样一条箭头。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxz85QamDCoJ4K-0tp%2Fimage.png)
+
+返回2的读操作，在返回1的读操作开始之前结束，所以我们有这样的箭头。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxzK9Ekrq-7VM2_TmZ%2Fimage.png)
+
+因为返回1的读操作必须在设置1的写操作之后，并且更重要的是，必须要在设置2的写操作之前。因为我们不能将X写了2之后再读出1来。所以我们有了这样的箭头。
+
+![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxzdeP2fgsIpgeudmO%2Fimage.png)
+
+因为这里的限制条件有个循环，所以没有一个线性一致的顺序能够满足前面的限制条件，因此这里的执行历史不是线性一致的，所以生成这样结果的系统不是线性一致的系统。但是只要去掉循环里面的任意一个请求，就可以打破循环，又可以是线性一致的了。

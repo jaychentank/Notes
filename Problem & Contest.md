@@ -103,7 +103,11 @@ vector<int> smallestSubarrays(vector<int> &nums) {
 
 ## Codeforces
 
-1. **807 Div.2**
+1. 828 Div.3
+
+   1e18的所有因子的数量大概是1e5个
+
+2. 807 Div.2
 
    D. Mark and Lightbulbs
 
@@ -111,7 +115,7 @@ vector<int> smallestSubarrays(vector<int> &nums) {
 
    ![image-20220824094644769](Problem & Contest.assets/image-20220824094644769.png)
 
-2. **805 Div.3**
+3. 805 Div.3
 
    ![image-20220826155542022](Problem & Contest.assets/image-20220826155542022.png)
 
