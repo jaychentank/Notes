@@ -429,10 +429,12 @@ int init = []() {
 }();
 
 ll C(int n, int r) {
+	if (r > n) return 0;
 	return F[n] * I[r] % mod * I[n - r] % mod;
 }
-ll A(int n, int r){
-    return F[n] * I[r] % mod;
+ll A(int n, int r) {
+	if (r > n) return 0;
+	return F[n] * I[r] % mod;
 }
 ~~~
 
