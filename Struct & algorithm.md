@@ -877,7 +877,7 @@ public:
         }
     }
     long long query(int x) {
-        long l res = 0;
+        long long res = 0;
         while (x > 0) {
             res += tree[x];
             x &= x - 1;
