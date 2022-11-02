@@ -390,7 +390,7 @@ Matrix Pow(Matrix x, ll n) {
 
 ## 组合数学
 
-变下项求和
+### 变下项求和
 
 ![image-20221101115554447](Struct & algorithm.assets/image-20221101115554447.png)
 
