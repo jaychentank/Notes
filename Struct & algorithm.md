@@ -870,7 +870,7 @@ private:
     vector<long long> tree;
 public:
     BIT(int n) : tree(n) {}
-    void add(int x, int val) {
+    void add(int x, long long val) {
         while (x < tree.size()) {
             tree[x] += val;
             x += x & -x;
