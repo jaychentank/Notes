@@ -62,6 +62,12 @@ for (int s = j; s; s = (s - 1) & j);//状压遍历子集
 b&(-b);//得到b二进制表示中最低位的1
 b=(b^(b&(-b));
 b=b&(b-1);//将最低位的1从b中去除
+
+//位运算枚举相同大小子集 Gosper's Hack
+//对x
+lowbit = x & -x;
+left = x + lb;
+right = (x ^ (x + lb)) / lb >> 2;
 ~~~
 
 ~~~C++
