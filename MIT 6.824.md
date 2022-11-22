@@ -459,11 +459,11 @@ Raft不能完全避免分割选票（Split Vote），但是可以通过为选举
 
 假设S3在任期6被选为Leader。在某个时刻，新Leader S3会发送任期6的第一个AppendEntries RPC，来传输任期6的第一个Log。
 
-这里的AppendEntries消息实际上有两条，因为要发给两个Followers。它们包含了客户端发送给Leader的请求。我们现在想将这个请求复制到所有的Followers上。**这里的AppendEntries RPC还包含了prevLogIndex字段和prevLogTerm字段**。所以Leader在发送AppendEntries消息时，会附带前一个槽位的信息。在我们的场景中，prevLogIndex是前一个槽位的位置，也就是12；prevLogTerm是S3上前一个槽位的任期号，也就是5。
+这里的AppendEntries消息实际上有两条，因为要发给两个Followers。它们包含了客户端发送给Leader的请求。**这里的AppendEntries RPC还包含了prevLogIndex字段和prevLogTerm字段**。所以Leader在发送AppendEntries消息时，会附带前一个槽位的信息。在我们的场景中，prevLogIndex是前一个槽位的位置，也就是12；prevLogTerm是S3上前一个槽位的任期号，也就是5。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBRbv-a5MbeIrL0QDVS%2F-MBRg4L_2lMmZBXh8Ous%2Fimage.png)
 
-Followers在收到AppendEntries消息时，可以知道它们收到了一个带有若干Log条目的消息，并且是从槽位13开始。**Followers在写入Log之前，会检查本地的前一个Log条目，是否与Leader发来的有关前一条Log的信息匹配。**
+**Followers在写入Log之前，会检查本地的前一个Log条目，是否与Leader发来的有关前一条Log的信息匹配。**
 
 所以对于S2 它显然是不匹配的。S2 在槽位12已经有一个条目，但是它来自任期4，而不是任期5。所以S2将拒绝这个AppendEntries，并返回False给Leader。S1在槽位12还没有任何Log，所以S1也将拒绝Leader的这个AppendEntries。所以Leader看到了两个拒绝。
 
@@ -473,7 +473,7 @@ Followers在收到AppendEntries消息时，可以知道它们收到了一个带�
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBRljzYEgVezZRH2cVm%2F-MBSjOijBYyB8FT_B2FY%2Fimage.png)
 
-对于S2来说，这次收到的AppendEntries消息中，prevLogIndex等于11，prevLogTerm等于3，与自己本地的Log匹配，所以，S2会接受这个消息。Raft论文中的图2规定，如果接受一个AppendEntries消息，那么需要首先删除本地相应的Log（如果有的话），再用AppendEntries中的内容替代本地Log。所以，S2会这么做：它会删除本地槽位12的记录，再添加AppendEntries中的Log条目。这个时候，S2的Log与S3保持了一致。
+对于S2来说，这次收到的AppendEntries消息中，prevLogIndex等于11，prevLogTerm等于3，与自己本地的Log匹配，所以，S2会接受这个消息。Raft论文中的图2规定，如果接受一个AppendEntries消息，那么需要首先删除本地相应的Log（如果有的话），再用AppendEntries中的内容替代本地Log。这个时候，S2的Log与S3保持了一致。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBRljzYEgVezZRH2cVm%2F-MBSliQIKThBT1WjnQr9%2Fimage.png)
 
@@ -483,33 +483,25 @@ Followers在收到AppendEntries消息时，可以知道它们收到了一个带�
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBRljzYEgVezZRH2cVm%2F-MBSmmPN7PxlIL_Ym48l%2Fimage.png)
 
-而Leader在收到了Followers对于AppendEntries的肯定的返回之后，**它会增加相应的nextIndex到14**。 
-
-**在这里，Leader使用了一种备份机制来探测Followers的Log中，第一个与Leader的Log相同的位置。在获得位置之后，Leader会给Follower发送从这个位置开始的，剩余的全部Log。经过这个过程，所有节点的Log都可以和Leader保持一致。**
+**而Leader在收到了Followers对于AppendEntries的肯定的返回之后，它会增加相应的nextIndex到14。** 
 
 ## 7.2 选举约束
 
-为了保证系统的正确性，并非任意节点都可以成为Leader。不是说第一个选举定时器超时了并触发选举的节点，就一定是Leader。Raft对于谁可以成为Leader，谁不能成为Leader是有一些限制的。
+为了保证系统的正确性，并非任意节点都可以成为Leader。不是说第一个选举定时器超时了并触发选举的节点就一定是Leader。
 
-下面证明并非任意节点都可以成为Leader。在这个反例中，Raft会选择拥有最长Log记录的节点作为Leader，这个规则或许适用于其他系统，实际上在一些其他设计的系统中的确使用了这样的规则，但是在Raft中，这条规则不适用。所以，我们这里需要研究的问题是：为什么不选择拥有最长Log记录的节点作为Leader？
-
-很容易可以展示为什么这是一个错误的观点。我们还是假设我们有3个服务器，现在服务器1（S1）有任期5，6，7的Log，服务器2和服务器3（S2和S3）有任期5，8的Log。
+为什么不选择拥有最长Log记录的节点作为Leader？
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBU-cLGzrm5ZAw-M4Lb%2F-MBW_OcVeCVhg2L3q6KY%2Fimage.png)
 
-这个场景可能出现吗？让我们回退一些时间，在这个时间点S1赢得了选举，现在它的任期号是6。它收到了一个客户端请求，在发出AppendEntries之前，它先将请求存放在自己的Log中，然后它就故障了，所以它没能发出任何AppendEntries消息。
-
-之后它很快就故障重启了，因为它是之前的Leader，所以会有一场新的选举。这次，它又被选为Leader。然后它收到了一个任期7的客户端请求，将这个请求加在本地Log之后，它又故障了。
+这个场景可能出现吗？让我们回退一些时间，在这个时间点S1赢得了选举，现在它的任期号是6。它收到了一个客户端请求，在发出AppendEntries之前，它先将请求存放在自己的Log中，然后它就故障了，所以它没能发出任何AppendEntries消息。之后它很快就故障重启了，因为它是之前的Leader，所以会有一场新的选举。这次，它又被选为Leader。然后它收到了一个任期7的客户端请求，将这个请求加在本地Log之后，它又故障了。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBU-cLGzrm5ZAw-M4Lb%2F-MBWaoJSRdRe5NZLD5q6%2Fimage.png)
 
 S1故障之后，我们又有了一次新的选举，这时S1已经关机了，不能再参加选举，这次S2被选为Leader。如果S2当选，而S1还在关机状态，S2会使用什么任期号呢？
 
-明显我们的答案是8。尽管没有写在黑板上，但是S1在任期6，7能当选，它必然拥有了过半节点的投票，过半服务器至少包含了S2，S3中的一个节点。当某个节点为候选人投票时，节点应该将候选人的任期号记录在持久化存储中。因此，当S1故障了，它们中至少一个知道当前的任期是8。**这里，只有知道了任期8的节点才有可能当选，如果只有一个节点知道，那么这个节点会赢得选举，因为它拥有更高的任期号**。所以我们现在有了这么一个场景。
+明显我们的答案是8。尽管没有写在黑板上，但是S1在任期6，7能当选，它必然拥有了过半节点的投票，过半服务器至少包含了S2，S3中的一个节点。当某个节点为候选人投票时，**节点应该将候选人的任期号记录在持久化存储中**。因此，当S1故障了，它们中至少一个知道当前的任期是8。**这里，只有知道了任期8的节点才有可能当选，如果只有一个节点知道，那么这个节点会赢得选举，因为它拥有更高的任期号**。所以我们现在有了这么一个场景。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBU-cLGzrm5ZAw-M4Lb%2F-MBWdJ_lN3OZSailEx6z%2Fimage.png)
-
-现在我们回到对于这个场景的最初的问题，假设S1重新上线了，并且我们又有了一次新的选举，这时候可以选择拥有最长Log记录的节点作为Leader可以吗？明显，答案是不可以的。最短Log记录的节点也不行。
 
 Raft有一个稍微复杂的选举限制（Election Restriction）。这个限制要求，在处理别节点发来的RequestVote RPC时，需要做一些检查才能投出赞成票。节点只能向满足下面条件之一的候选人投出赞成票：
 
@@ -520,11 +512,9 @@ Raft有一个稍微复杂的选举限制（Election Restriction）。这个限�
 
 ## 7.3 快速恢复
 
-在日志恢复机制中，如果Log有冲突，Leader每次会回退一条Log条目。 这在许多场景下都没有问题。但是在某些现实的场景中，至少在Lab2的测试用例中，每次只回退一条Log条目会花费很长很长的时间。所以，现实的场景中，可能一个Follower关机了很长时间，错过了大量的AppendEntries消息（比如1000条Log条目）。Leader重启之后，需要每次通过一条RPC来回退一条Log条目来遍历1000条Follower错过的Log记录。在一些不正常的场景中，假设我们有5个服务器，有1个Leader，这个Leader和另一个Follower困在一个网络分区。但是这个Leader并不知道它已经不再是Leader了。它还是会向它唯一的Follower发送AppendEntries，因为这里没有过半服务器，所以没有一条Log会commit。在另一个有多数服务器的网络分区中，系统选出了新的Leader并继续运行。旧的Leader和它的Follower可能会记录无限多的旧的任期的未commit的Log。当旧的Leader和它的Follower重新加入到集群中时，这些Log需要被删除并覆盖。你会在Lab2的测试用例中发现这个场景。
+在日志恢复机制中，如果Log有冲突，Leader每次会回退一条Log条目。但在现实的场景中，可能一个Follower关机了很长时间，错过了大量的AppendEntries消息（比如1000条Log条目）。Leader重启之后，需要每次通过一条RPC来回退一条Log条目来遍历1000条Follower错过的Log记录。或者在一些不正常的场景中，假设我们有5个服务器，有1个Leader，这个Leader和另一个Follower困在一个网络分区。但是这个Leader并不知道它已经不再是Leader了。它还是会向它唯一的Follower发送AppendEntries，因为这里没有过半服务器，所以没有一条Log会commit。在另一个有多数服务器的网络分区中，系统选出了新的Leader并继续运行。旧的Leader和它的Follower可能会记录无限多的旧的任期的未commit的Log。当旧的Leader和它的Follower重新加入到集群中时，这些Log需要被删除并覆盖。**你会在Lab2的测试用例中发现这个场景**。
 
-所以，为了能够更快的恢复日志，Raft让Follower返回足够的信息给Leader，这样Leader可以以任期（Term）为单位来回退，而不用每次只回退一条Log条目。所以现在，如果Leader和Follower的Log不匹配，Leader只需要对每个不同的任期发送一条AppendEntries。
-
-我将可能出现的场景分成3类，为了简化，这里只画出一个Leader（S2）和一个Follower（S1），S2将要发送一条任期号为6的AppendEntries消息给Follower。
+所以，为了能够更快的恢复日志，Raft让Follower返回足够的信息给Leader，这样**Leader可以以任期（Term）为单位来回退**，而不用每次只回退一条Log条目。所以现在，如果Leader和Follower的Log不匹配，Leader只需要对每个不同的任期发送一条AppendEntries。
 
 场景1：S1没有任期6的任何Log，因此我们需要回退一整个任期的Log。
 
@@ -554,61 +544,37 @@ Raft有一个稍微复杂的选举限制（Election Restriction）。这个限�
 
 ## 7.4 持久化
 
-从Raft论文中可以看到，有些数据被标记为持久化的（Persistent），有些信息被标记为非持久化的（Volatile）。持久化和非持久化的区别只在服务器重启时重要。当你更改了被标记为持久化的某个数据，服务器应该将更新写入到磁盘，或者其它的持久化存储中。持久化的存储可以确保当服务器重启时，服务器可以找到相应的数据，并将其加载到内存中。这样可以使得服务器在故障并重启后，继续重启之前的状态。
+持久化和非持久化的区别只在服务器重启时重要。
 
-你或许会认为，如果一个服务器故障了，那简单直接的方法就是将它从集群中摘除。我们需要具备从集群中摘除服务器，替换一个全新的空的服务器，并让该新服务器在集群内工作的能力。如果服务器是磁盘故障了，你也不能指望能从该服务器的磁盘中获得任何有用的信息。所以我们的确需要能够用全新的空的服务器替代现有服务器的能力。但是这样不足以应付所有有问题的场景。
+如果一个服务器故障了，那简单直接的方法就是将它从集群中摘除。我们需要具备从集群中摘除服务器，替换一个全新的空的服务器，并让该新服务器在集群内工作的能力。如果服务器是磁盘故障了，你也不能指望能从该服务器的磁盘中获得任何有用的信息。
 
-实际上，一个常见的故障是断电。断电的时候，整个集群都同时停止运行，这种场景下，我们希望我们的服务是容错的， 我们需要能够得到之前状态的拷贝。
-
-在Raft论文中，有且仅有三个数据是需要持久化存储的。它们分别是**Log、currentTerm、votedFor**。Log是所有的Log条目。当某个服务器刚刚重启，在它加入到Raft集群之前，它必须要检查并确保这些数据有效的存储在它的磁盘上。服务器必须要有某种方式来发现，自己的确有一些持久化存储的状态，而不是一些无意义的数据。
+在Raft论文中，有且仅有三个数据是需要持久化存储的。它们分别是**Log、currentTerm、votedFor**。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBYxFoDIpfYiSblbIwa%2F-MBfXoF-HOhQM8ZELAoC%2Fimage.png)
 
-**Log需要被持久化存储的原因是，这是唯一记录了应用程序状态的地方**。假如我们运行了一个数据库或者为VMware FT运行了一个Test-and-Set服务，根据Raft论文，实际的数据库或者实际的test-set值，并不会被持久化存储，只有Raft的Log被存储了。
+**Log（所有的Log条目）需要被持久化存储的原因是，这是唯一记录了应用程序状态的地方**。
 
-**currentTerm和votedFor都是用来确保每个任期只有最多一个Leader**。在一个故障的场景中，如果一个服务器收到了一个RequestVote请求，并且为服务器1投票了，之后它故障。如果它没有存储它为哪个服务器投过票，当它故障重启之后，收到了来自服务器2的同一个任期的另一个RequestVote请求，那么它还是会投票给服务器2，因为它发现自己的votedFor是空的，因此它认为自己还没投过票。现在这个服务器，在同一个任期内同时为服务器1和服务器2投了票。因为服务器1和服务器2都会为自己投票，它们都会认为自己有过半选票（3票中的2票），那它们都会成为Leader。现在同一个任期里面有了两个Leader。这就是为什么votedFor必须被持久化存储。
+**currentTerm和votedFor都是用来确保每个任期只有最多一个Leader**。VotedFor防止一台服务器故障之后给两个服务器投票。
 
-**currentTerm的情况要更微妙一些，如果（重启之后）我们不知道任期号是什么，很难确保一个任期内只有一个Leader。** 
-
-![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBYxFoDIpfYiSblbIwa%2F-MBfZw6jU_SKyHDJS7-d%2Fimage.png)
-
-在这里例子中，S1关机了，S2和S3会尝试选举一个新的Leader。它们需要证据证明，正确的任期号是8，而不是6。如果仅仅是S2和S3为彼此投票，它们不知道当前的任期号，它们只能查看自己的Log，它们或许会认为下一个任期是6（因为Log里的上一个任期是5）。如果它们这么做了，那么它们会从任期6开始添加Log。但是接下来，就会有问题了，因为我们有了两个不同的任期6（另一个在S1中）。这就是为什么currentTerm需要被持久化存储的原因，因为它需要用来保存已经被使用过的任期号。
-
-**这些数据需要在每次你修改它们的时候存储起来。所以可以确定的是，安全的做法是每次你添加一个Log条目，更新currentTerm或者更新votedFor**。在一个真实的Raft服务器上，这意味着将数据写入磁盘，所以你需要一些文件来记录这些数据。如果你发现，直到服务器与外界通信时，才有可能持久化存储数据，那么你可以通过一些批量操作来提升性能。例如，只在服务器回复一个RPC或者发送一个RPC时，服务器才进行持久化存储，这样可以节省一些持久化存储的操作。之所以这很重要是因为，向磁盘写数据是一个代价很高的操作。
+**这些数据需要在每次你修改它们的时候存储起来。安全的做法是每次你添加一个Log条目，更新currentTerm或者更新votedFor**。然而直到服务器与外界通信时，才有可能持久化存储数据，那么你可以通过一些批量操作来提升性能。例如，只在服务器回复一个RPC或者发送一个RPC时，服务器才进行持久化存储。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBfeVmGeTwYPn6bU6va%2F-MBfeXInUn6iyXMKSz5a%2Fimage.png)
 
-对于批量执行操作，如果有大量的客户端请求，或许你应该同时接收它们，但是先不返回。等大量的请求累积之后，一次性持久化存储（比如)100个Log，之后再发送AppendEntries。如果Leader收到了一个客户端请求，在发送AppendEntries RPC给Followers之前，必须要先持久化存储在本地。因为Leader必须要commit那个请求，并且不能忘记这个请求。实际上，在回复AppendEntries 消息之前，Followers也需要持久化存储这些Log条目到本地，因为它们最终也要commit这个请求，它们不能因为重启而忘记这个请求。
+对于批量执行操作，如果有大量的客户端请求，或许你应该同时接收它们，但是先不返回。等大量的请求累积之后，一次性持久化存储（比如)100个Log，之后再发送AppendEntries。如果Leader收到了一个客户端请求，在发送AppendEntries RPC给Followers之前，必须要先持久化存储在本地。因为Leader必须要commit那个请求，并且不能忘记这个请求（Follwos同理）。
 
-为什么服务器重启时，commitIndex、lastApplied、nextIndex、matchIndex，可以被丢弃？例如，lastApplied表示当前服务器执行到哪一步，如果我们丢弃了它的话，我们需要重复执行Log条目两次（重启前执行过一次，重启后又要再执行一次），这是正确的吗？为什么可以安全的丢弃lastApplied？
-
-这里综合考虑了Raft的简单性和安全性。之所以这些数据是非持久化存储的，是因为**Leader可以通过检查自己的Log和发送给Followers的AppendEntries的结果，来发现哪些内容已经commit了**。如果因为断电，所有节点都重启了。Leader并不知道哪些内容被commit了，哪些内容被执行了。但是当它发出AppendEntries，并从Followers搜集回信息。它会发现，Followers中有哪些Log与Leader的Log匹配，因此也就可以发现，在重启前，有哪些被commit了。
-
-根据Raft论文，应用程序状态会随着重启而消失，所以当Leader重启时，Leader会从第一条Log开始，执行每一条Log条目，并提交给应用程序。所以，重启之后，应用程序可以通过重复执行每一条Log来完全从头构建自己的状态。这是一种简单且优雅的方法，但是很明显会很慢。这将会引出我们的下一个话题：Log compaction和Snapshot。
+所以，重启之后，应用程序可以通过重复执行每一条Log来完全从头构建自己的状态。这是一种简单且优雅的方法，但是很明显会很慢。这将会引出我们的下一个话题：Log compaction和Snapshot。
 
 ## 7.5 日志快照
 
-Log压缩和快照（Log compaction and snapshots）在Lab3b中出现的较多。在Raft中，Log压缩和快照解决的问题是：对于一个长期运行的系统，例如运行了几周，几个月甚至几年，如果我们按照Raft论文的规则，那么Log会持续增长。最后可能会有数百万条Log，从而需要大量的内存来存储。如果持久化存储在磁盘上，最终会消耗磁盘的大量空间。如果一个服务器重启了，它需要通过重新从头开始执行这数百万条Log来重建自己的状态。当故障重启之后，遍历并执行整个Log的内容可能要花费几个小时来完成。这在某种程度上来说是浪费，因为在重启之前，服务器已经有了一定的应用程序状态。
+Log压缩和快照（Log compaction and snapshots）在Lab3b中出现的较多。在Raft中，Log压缩和快照解决的问题是：对于一个长期运行的系统，Log会持续增长。最后可能会有数百万条Log，从而需要大量的内存来存储。如果持久化存储在磁盘上，最终会消耗磁盘的大量空间。如果一个服务器重启了，它需要通过重新从头开始执行这数百万条Log来重建自己的状态。当故障重启之后，遍历并执行整个Log的内容可能要花费几个小时来完成。
 
-为了应对这种场景，Raft有了快照（Snapshots）的概念。**快照背后的思想是，要求应用程序将其状态的拷贝作为一种特殊的Log条目存储下来**。我们之前几乎都忽略了应用程序，假设我们基于Raft构建一个key-value数据库，Log将会包含一系列的Put/Get或者Read/Write请求。假设一条Log包含了一个Put请求，客户端想要将X设置成1，另一条Log想要将X设置成2，下一条将Y设置成7。
+**快照背后的思想是，要求应用程序将其状态的拷贝作为一种特殊的Log条目存储下来**。对于大多数的应用程序来说，应用程序的状态远小于Log的大小。如果存储Log，可能尺寸会非常大，相应的，如果存储key-value表单，这可能比Log尺寸小得多。这就是快照的背后原理。
 
-如果Raft一直执行没有故障，Raft之上的将会是应用程序，在这里，应用程序将会是key-value数据库。它将会维护一个表单，当Raft一个接一个的上传命令时，应用程序会更新它的表单。
+所以，**当Raft认为它的Log将会过于庞大，例如大于1MB，10MB或者任意的限制，Raft会要求应用程序在Log的特定位置，对其状态做一个快照**。Raft会从Log中选取一个与快照对应的**点**，然后要求应用程序在那个点的位置做一个快照。如果我们有一个点的快照，那么我们可以安全的将那个点之前的Log丢弃。
 
-![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkaX1bvktd71PjL49f%2Fimage.png)
-
-对于大多数的应用程序来说，应用程序的状态远小于Log的大小。在这里，如果存储Log，可能尺寸会非常大，相应的，如果存储key-value表单，这可能比Log尺寸小得多。这就是快照的背后原理。
-
-所以，**当Raft认为它的Log将会过于庞大，例如大于1MB，10MB或者任意的限制，Raft会要求应用程序在Log的特定位置，对其状态做一个快照**。Raft会从Log中选取一个与快照对应的**点**，然后要求应用程序在那个点的位置做一个快照。这里极其重要，因为我们接下来将会丢弃所有那个点之前的Log记录。如果我们有一个点的快照，那么我们可以安全的将那个点之前的Log丢弃。（在key-value数据库的例子中）快照本质上就是key-value表单。
-
-**我们还需要为快照标注Log的槽位号**。这样，Log槽位号之后的所有Log，那么快照对应槽位号之前的这部分Log可以被丢弃，我们将不再需要这部分Log
+**我们还需要为快照标注Log的槽位号**。这样，Log槽位号之后的所有Log，那么快照对应槽位号之前的这部分Log可以被丢弃，我们将不再需要这部分Log。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkZYHY6gUZ3XIarAzv%2F-MBkciXeDWIwbUURR0LQ%2Fimage.png)
-
-现在重启会发生什么呢？重启的时候，必须让Raft有方法知道磁盘中最近的快照和Log的组合，并将快照传递给应用程序。所以应用程序不仅需要有能力能生成一个快照，它还需要能够吸纳一个之前创建的快照，并通过它稳定的重建自己的内存。Raft并不理解快照中有什么，只有应用程序知道，因为快照里面都是应用程序相关的信息。
-
-不幸的是，这里丢弃了快照之前的Log，引入了大量的复杂性。**如果有的Follower的Log较短，在Leader的快照之前就结束，那么除非有一种新的机制，否则那个Follower永远也不可能恢复完整的Log**。因为，如果一个Follower只有前两个槽位的Log，Leader不再有槽位3的Log可以通过AppendEntries RPC发给Follower，Follower的Log也就不可能补齐至Leader的Log。
-
-Raft选择的方法是，Leader可以丢弃Follower需要的Log。所以，我们需要某种机制让AppendEntries能处理某些Follower Log的结尾到Leader Log开始之间丢失的这一段Log。解决方法是（一个新的消息类型）InstallSnapshot RPC。
 
 **当Follower刚刚恢复，如果它的Log短于Leader通过 AppendEntries RPC发给它的内容，那么它首先会强制Leader回退自己的Log。在某个点，Leader将不能再回退，因为它已经到了自己Log的起点。这时，Leader会将自己的快照发给Follower，之后立即通过AppendEntries将后面的Log发给Follower。**
 
@@ -616,50 +582,28 @@ Raft选择的方法是，Leader可以丢弃Follower需要的Log。所以，我�
 
 ## 7.6 线性一致
 
-我们对于正确的定义就是线性一致（Linearizability）或者说强一致（Strong consistency）。通常来说，线性一致等价于强一致。一个服务是线性一致的，那么它表现的就像只有一个服务器，并且服务器没有故障，这个服务器每次执行一个客户端请求，并且没什么奇怪的是事情发生。
+通常来说，线性一致等价于强一致。一个服务是线性一致的，那么它表现的就像只有一个服务器，并且服务器没有故障，这个服务器每次执行一个客户端请求，并且没什么奇怪的是事情发生。
 
-一个系统的执行历史是一系列的客户端请求，或许这是来自多个客户端的多个请求。**如果执行历史整体可以按照一个顺序排列，且排列顺序与客户端请求的实际时间相符合，那么它是线性一致的。当一个客户端发出一个请求，得到一个响应，之后另一个客户端发出了一个请求，也得到了响应，那么这两个请求之间是有顺序的，因为一个在另一个完成之后才开始。一个线性一致的执行历史中的操作是非并发的，也就是时间上不重合的客户端请求与实际执行时间匹配。并且，每一个读操作都看到的是最近一次写入的值。**
+**如果执行历史整体可以按照一个顺序排列，且排列顺序与客户端请求的实际时间相符合，那么它是线性一致的。当一个客户端发出一个请求，得到一个响应，之后另一个客户端发出了一个请求，也得到了响应，那么这两个请求之间是有顺序的，因为一个在另一个完成之后才开始。一个线性一致的执行历史中的操作是非并发的，也就是时间上不重合的客户端请求与实际执行时间匹配。并且，每一个读操作都看到的是最近一次写入的值。**
 
-执行历史是对于客户端请求的记录。
-
-线性一致这个概念里面的操作，是从一个点开始，到另一个点结束。所以，这里前一个点对应了客户端发送请求，后一个点对应了收到回复的时间。我们假设，在某个特定的时间，客户端发送了请求，将X设置为1。
-
-过了一会，在第二条竖线处，客户端收到了一个回复。客户端在第一条竖线发送请求，在第二条竖线收到回复。
-
-又过了一会，这个客户端或者其他客户端再发送一个请求，要将X设置为2，并收到了相应的回复。
-
-![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxsjtsbGkVi3Ouoat4%2Fimage.png)
-
-同时，某个客户端发送了一个读X的请求，得到了2。在第一条竖线发送读请求，在这个点，也就是第二条竖线，收到了值是2的响应。
-
-![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxsuvCrxEINRD0hAgN%2Fimage.png)
-
-同时，还有一个读X的请求，得到值是1的响应。
+线性一致这个概念里面的操作，是从一个点开始，到另一个点结束。所以，这里前一个点对应了客户端发送请求，后一个点对应了收到回复的时间。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxtHWPplv18PFyQpZG%2Fimage.png)
 
-如果我们观察到了这样的输入输出（执行历史），那么这样的执行历史是线性一致的吗？
+这样的执行历史是线性一致的吗？
 
 **要达到线性一致，我们需要为这里的4个操作生成一个线性一致的顺序**。所以我们现在要确定顺序，对于这个顺序，有两个限制条件：
 
 1. 如果一个操作在另一个操作开始前就结束了，那么这个操作必须在执行历史中出现在另一个操作前面。
 2. 执行历史中，读操作，必须在相应的key的写操作之后。
 
-或许还有一些其他的限制，但是不管怎样，我们将这些箭头展平成一个线性一致顺序来看看真实的执行历史，我们可以发现总的执行历史是线性一致的。首先是将X写1，之后是读X得到1，之后将X写2，之后读X得到2。（这里可以这么理解，左边是一个多副本系统的输入输出，因为分布式程序或者程序的执行，产生了这样的时序，但是在一个线性一致的系统中，实际是按照右边的顺序执行的操作。左边是实际时钟，右边是逻辑时钟。）
-
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxwGjVN52Eye42zgkF%2Fimage.png)
 
 所以这里有个顺序且符合前面两个限制条件，所以执行历史是线性一致的。
 
-让我再写一个不是线性一致的例子。我们假设有一个将X写1的请求，另一个将X写2的请求，还有一些读操作。 
-
-在我们生成的顺序中，第一个写操作必须在第二个写操作之前。第二个写操作，写的值是2，所以必须在返回2的读操作之前。返回2的读操作，在返回1的读操作开始之前结束。**返回1的读操作必须在设置1的写操作之后，并且更重要的是，必须要在设置2的写操作之前。因为我们不能将X写了2之后再读出1来**。
-
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBkktwVClGK6ahgIS4B%2F-MBxzdeP2fgsIpgeudmO%2Fimage.png)
 
-因为这里的限制条件有个循环，所以没有一个线性一致的顺序能够满足前面的限制条件，因此这里的执行历史不是线性一致的。
-
-这里还有一个例子。首先我们有一个写X为0的请求，之后有两个并发的写请求和两个读请求。这里的请求历史记录是线性一致的。让我们假设，客户端C1发送了这里的两个读请求。客户端C1首先读X得到了2，然后读X得到了1。然后有另一个客户端C2（下图有误，第二个C1应为C2），读X得到了1，再次读X得到了2。
+这里的执行历史不是线性一致的。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MCA4-9iLYEmtXu0ewYN%2F-MCA4uoP-H2jW7Fd_rgQ%2Fimage.png)
 
@@ -667,27 +611,15 @@ Raft选择的方法是，Leader可以丢弃Follower需要的Log。所以，我�
 
 线性一致的一个条件是，**对于整个请求历史记录，只存在一个序列，不允许不同的客户端看见不同的序列，或者说不允许一个存储在系统中的数据有不同的演进过程。**所以这里不应该有的证据就是C2现在观察到的读请求。
 
-这里的请求历史记录可能出现的原因是，我们正在构建多副本的系统，要么是一个Raft系统，要么是带有缓存的系统，所以或许有多个服务器都有X的拷贝，如果它们还没有获取到commit消息，多个服务器在不同的时间会有X的不同的值。
+这里的请求历史记录可能出现的原因是，我们正在构建多副本的系统，所以或许有多个服务器都有X的拷贝，如果它们还没有获取到commit消息，多个服务器在不同的时间会有X的不同的值。
 
 所以这个例子的教训是，对于系统执行写请求，只能有一个顺序，所有客户端读到的数据的顺序，必须与系统执行写请求的顺序一致。
-
-这里还有另一个简单的请求历史记录的例子，它明显不是线性一致的。线性一致系统，或者强一致系统不可能提供旧的数据的证据。
-
-![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MCZOMvzhNQ9svfDymIJ%2F-MCZP4g_hm7B-1u8TAGk%2Fimage.png)
 
 还有一个小的例子。现在我们有两个客户端，其中一个提交了一个写X为3的请求，之后是一个写X为4的请求。同时，我们还有另一个客户端，在这个时间点，客户端发出了一个读X的请求，但是客户端没有收到回复。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MCZOMvzhNQ9svfDymIJ%2F-MCZXOjdCGd3bze4jf6F%2Fimage.png)
 
-在一个实际的系统实现中，可能有任何原因导致这个结果，例如：
-
-1. Leader在某个时间故障了
-2. 这个客户端发送了一个读请求，但是这个请求丢包了因此Leader没有收到这个请求
-3. Leader收到了这个读请求并且执行了它，但是回复的报文被网络丢包了
-4. Leader收到了请求并开始执行，在完成执行之前故障了
-5. Leader执行了这个请求，但是在返回响应的时候故障了
-
-不管是哪种原因，从客户端的角度来看，就是发送了一个请求，然后就没有回复了。在大多数系统的客户端内部实现机制中，客户端将会重发请求，或许发给一个不同的Leader，或许发送给同一个Leader。之后，终于收到了一个回复。这将是Lab3的一个场景。
+在大多数系统的客户端内部实现机制中，客户端将会重发请求，或许发给一个不同的Leader，或许发送给同一个Leader。之后，终于收到了一个回复。这将是Lab3的一个场景。
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MCZOMvzhNQ9svfDymIJ%2F-MCZnR4O4w_F7Ad3rMwQ%2Fimage.png)
 
@@ -697,15 +629,7 @@ Raft选择的方法是，Leader可以丢弃Follower需要的Log。所以，我�
 
 ![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MCZOMvzhNQ9svfDymIJ%2F-MCZpCydiVoitwHiuEJG%2Fimage.png)
 
-对于这个读请求，返回3或者4都是合法的。取决于这个读请求实际上是在这里执行，
-
-![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MCZOMvzhNQ9svfDymIJ%2F-MCZsGH-wzmV4PlgYr2C%2Fimage.png)
-
-还是在这里执行。
-
-![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MCZOMvzhNQ9svfDymIJ%2F-MCZsMndPPUTTyLQzPwW%2Fimage.png)
-
-所以，如果你的客户端有重传，并且你要从客户端的角度来定义线性一致，那么一个请求的区间从第一次传输开始，到最后应用程序实际收到响应为止，期间可能发生了很多次重传。
+对于这个读请求，返回3或者4都是合法的。
 
 # Lecture 08 - Zookeeper
 
