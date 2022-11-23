@@ -229,7 +229,7 @@ GFS集群包括：一个master和多个chunkserver，并且若干个client会与
 主要架构特性：
 
 1. **chunk**：存储在 GFS 中的文件分为多个 chunk，chunk 大小为 64M，每个 chunk 在创建时 master 会分配一个不可变、全局唯一的 64 位标识符(`chunk handle`)；**默认情况下，一个 chunk 有 3 个副本，分别在不同的 chunkserver 上**。
-2. **master**：维护文件系统的 **metadata**，它知道文件被分割为哪些 chunk、以及这些 chunk 的存储位置；它还负责 chunk 的迁移、重新平衡(rebalancing)和垃圾回收；此外，master 通过HeartBeat与 chunkserver 通信，向其传递指令，并收集状态。
+2. **master**：维护文件系统的 **metadata**，它知道文件被分割为哪些 chunk、以及这些 chunk 的存储位置；它还负责 chunk 的迁移、重新平衡(rebalancing)和垃圾回收；此外，master 通过heartbeats(AppendEntries RPCs with no log entries)与 chunkserver 通信，向其传递指令，并收集状态。
 3. **client**：首先向 master 询问文件 metadata，然后根据 metadata 中的位置信息去对应的 chunkserver 获取数据；
 4. **chunkserver**：存储 chunk，**client 和 chunkserver 不会缓存 chunk 数据，防止数据出现不一致**；
 
@@ -404,17 +404,17 @@ Raft生命周期中可能会有不同的Leader，它使用任期号（term numbe
 
 开始一次选举的意思是，当前服务器会增加任期号（term number），因为它想成为一个新的Leader。之后，当前服务器会发出请求投票（RequestVote）RPC，这个消息会发送到另外的N-1个节点（Leader的候选人总是会在选举时投票给自己）。
 
-当一个服务器赢得了一次选举，这个服务器会收到过半的认可投票，这个服务器会直接知道自己是新的Leader，然后通过HeartBeat通知其他服务器。Raft规定，**除非是当前任期的Leader，没人可以发出AppendEntries消息。其他服务器通过接收特定任期号的AppendEntries来知道，选举成功了**。
+当一个服务器赢得了一次选举，这个服务器会收到过半的认可投票，这个服务器会直接知道自己是新的Leader，然后通过heartbeats通知其他服务器。Raft规定，**除非是当前任期的Leader，没人可以发出AppendEntries消息。其他服务器通过接收特定任期号的AppendEntries来知道，选举成功了**。
 
 ## 6.7 选举定时器
 
-**任何一条AppendEntries消息都会重置所有Raft节点的选举定时器**。所以只要所有环节都在正常工作，不断重复的HeartBeat会阻止任何新的选举发生。
+**任何一条AppendEntries消息都会重置所有Raft节点的选举定时器**。所以只要所有环节都在正常工作，不断重复的heartbeats会阻止任何新的选举发生。
 
 如果一次选举选出了0个Leader，这次选举就失败了，接下来它们的选举定时器会重新计时，因为选举定时器只会在收到了AppendEntries消息时重置，但是由于没有Leader，所有也就没有AppendEntries消息。所有的选举定时器重新开始计时，如果我们不够幸运的话，所有的定时器又会在同一时间到期，所有节点又会投票给自己，又没有人获得了过半投票，这个状态可能会一直持续下去。
 
 Raft不能完全避免分割选票（Split Vote），但是可以通过为选举定时器随机选择超时时间来尽可能避免这一情况。
 
-一个明显的要求是，**选举定时器的超时时间需要至少大于Leader的HeartBeat间隔**。**实际上由于网络可能丢包，这里你或许希望将下限设置为多个HeartBeat间隔**。
+一个明显的要求是，**选举定时器的超时时间需要至少大于Leader的heartbeats间隔**。**实际上由于网络可能丢包，这里你或许希望将下限设置为多个heartbeats间隔**。
 
 那超时时间的上限呢？
 
@@ -811,7 +811,7 @@ Zookeeper的API某种程度上来说像是一个文件系统。它有一个层�
 这里的文件和目录都被称为znodes。Zookeeper中包含了3种类型的znode，了解他们对于解决问题会有帮助。1.
 
 1. Regular znodes。这种znode一旦创建，就永久存在，除非你删除了它。
-2. Ephemeral znodes。如果Zookeeper认为创建它的客户端挂了，它会删除这种类型的znodes。这种类型的znodes与客户端会话绑定在一起，所以客户端需要时不时的发送心跳给Zookeeper，告诉Zookeeper自己还活着，这样Zookeeper才不会删除客户端对应的ephemeral znodes。
+2. Ephemeral znodes。如果Zookeeper认为创建它的客户端挂了，它会删除这种类型的znodes。这种类型的znodes与客户端会话绑定在一起，所以客户端需要时不时的发送heartbeats给Zookeeper，告诉Zookeeper自己还活着，这样Zookeeper才不会删除客户端对应的ephemeral znodes。
 3. Sequential znodes。它的意思是，当你想要以特定的名字创建一个文件，Zookeeper实际上创建的文件名是你指定的文件名再加上一个数字。当有多个客户端同时创建Sequential文件时，Zookeeper会确保这里的数字不重合，同时也会确保这里的数字总是递增的。
 
 Zookeeper以RPC的方式暴露以下API。
