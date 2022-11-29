@@ -293,7 +293,7 @@ GFS 通过 snapshot 来创建一个文件或者目录树的备份，它可以用
 
 **状态转移**背后的思想是，Primary将自己完整状态，比如说内存中的内容，拷贝并发送给Backup。Backup会保存收到的最近一次状态，所以Backup会有所有的数据。
 
-**复制状态机**不会在不同的副本之间发送状态，而是将发送给Primary的外部事件发送给Backup。。
+**复制状态机**不会在不同的副本之间发送状态，而是将发送给Primary的外部事件发送给Backup。
 
 VMware FT论文讨论的都是复制状态机，并且只涉及了单核CPU（面对多核和并行计算，状态转移更加健壮）。
 
@@ -369,7 +369,7 @@ Raft会以库（Library）的形式存在于服务中。如果你有一个基于
 5. 现在Leader知道过半服务器已经添加了Log，可以执行客户端请求，并返回给客户端。但是服务器2还不知道这一点，服务器2只知道：我从Leader那收到了这个请求，但是我不知道这个请求是不是已经被Leader提交（committed）了，这取决于我的响应是否被Leader收到。服务器2只知道，它的响应提交给了网络，或许Leader没有收到这个响应，也就不会决定commit这个请求。所以这里还有一个阶段。一旦Leader发现请求被commit之后，它需要将这个消息通知给其他的副本。
 6. 在Raft中，没有明确的committed消息。相应的，committed消息被夹带在下一个AppendEntries消息中，由Leader下一次的AppendEntries对应的RPC发出。
 
-![img](MIT 6.824.assets/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBGHvLZY-xqxN_-Tncs%2F-MBGR2pnDa99hWttXxYr%2Fimage.png)
+![img](https://906337931-files.gitbook.io/~/files/v0/b/gitbook-legacy-files/o/assets%2F-MAkokVMtbC7djI1pgSw%2F-MBGHvLZY-xqxN_-Tncs%2F-MBGR2pnDa99hWttXxYr%2Fimage.png?alt=media&token=60d2d4bf-73ce-4c49-8528-d86fd88693bb)
 
 ## 6.4 日志
 
