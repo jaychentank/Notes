@@ -8,32 +8,6 @@
 
 时间复杂度O(n)
 
-**528.按权重随机选择**
-
-~~~C++
-class Solution {
-private:
-    mt19937 gen;
-    uniform_int_distribution<int> dis;
-    vector<int> pre;
-
-public:
-    Solution(vector<int>& w): gen(random_device{}()), dis(1, accumulate(w.begin(), w.end(), 0)) {
-        partial_sum(w.begin(), w.end(), back_inserter(pre));
-    }
-    
-    int pickIndex() {
-        int x = dis(gen);
-        return lower_bound(pre.begin(), pre.end(), x) - pre.begin();
-    }
-};
-~~~
-
-1. mt19937头文件是\<random> 是伪随机数产生器，用于产生高性能的随机数
-2. uniform_int_distribution 头文件在\<random>中，是一个随机数分布类，参数为生成随机数的类型，构造函数接受两个值表示区间段
-3. partial_sum函数的头文件在\<numeric>，对(first, last)内的元素逐个求累计和，放在result容器内
-4. back_inserter函数头文件\<iterator>，用于在末尾插入元素。
-
 **652.寻找重复的子树**
 
 ~~~C++
@@ -73,11 +47,7 @@ private:
 
 ## Codeforces
 
-1. 828 Div.3
-
-   1e18的所有因子的数量大概是1e5个
-
-2. 807 Div.2
+1. 807 Div.2
 
    D. Mark and Lightbulbs
 
@@ -85,7 +55,7 @@ private:
 
    ![image-20220824094644769](Problem & Contest.assets/image-20220824094644769.png)
 
-3. 805 Div.3
+2. 805 Div.3
 
    ![image-20220826155542022](Problem & Contest.assets/image-20220826155542022.png)
 
@@ -684,33 +654,6 @@ STAR模式（还可以用于叙述故事）
     这里举一个简单的例子，比如面试官问hash table处理冲突有哪些常用的方式，各有什么优缺点。那么可以回答常用的有线性探测和链地址两种。如果自己有相应的经验，那么就可以结合经验谈谈优缺点，例如线性探测在实际使用的时候常常需要空间开得比较大，hash table的装载因子需要维持一个一直比较小的状态（比如25%-50%这样），否则的话性能就会很差，因为查询和插入都会频繁地进行长距离的线性探测。而拉链法对空间的利用效率就会比较高。在提供足够的空间的时候，按经验线性探测会比拉链法快很多，比如之前做了个项目，在满足空间条件的时候线性探测会快7倍左右（这是在结合经验谈），原因是线性探测比链接法对cache更友好（这是基础知识）。
 
 
-
-**英文介绍：**
-
-Hello, sir/madam. I’m so grateful to be here for this interview. My name is Chen Ziyang, a first-year graduate student in Huazhong University of science and technology now. My major is computer science. I have good learning ability, coding ability, and love to communicate with other people. I think when I face a new technology or a new programming language, I can master it very quickly. I confirm that I'm a good fit for the Microsoft Explore position. By the way, I often use Word and OneNote to take notes, and OneDrive can help me sync files, which are closely connected with my life. So Microsoft is always my dream company. I want to work with the best engineers in the world and develop products that will be used by the world. which is an exciting and amazing work for me. Maybe my spoken English isn't very good at present, but I believe that if I come here for an internship, I can greatly improve my speaking ability. Thank you for the opportunity.
-
- 面试官您好，我叫陈子阳，是华中科技大学研一的学生，我的专业是计算机科学与技术。非常感谢贵公司能给我这次机会来参加面试。我一直也算一个微软的小粉丝，我经常用Word和Onenote来记笔记，而且OneDrive能很方便的帮我同步这些内容。我的工作和生活已经离不开微软的产品。我觉得我比较适合贵公司Explore这个岗位。我认为我的优点是有较强的学习能力，当我遇到一个新的技术或者是新的编程语言的时候，我能很快掌握它，我一直非常坚信这一点。同时我有较强的编程能力，而且也热爱与人沟通来解决问题。微软一直是我梦想中的公司，我很想在这里和世界上最好的工程师做同事，能够和大家一起创造出能让世界都能用的产品，并且我也一直在为此奋斗。谢谢。
-
- 遇到最大的困难：沟通问题，团队协同工作的问题
-比方说，把“对工作负责”这个优点包装成“对自己和他人要求过高”，这种的回答方式明着看是缺点，实则是在告诉对方，你是严于律己、对工作认真负责的人。
-同样的，你可以说自己遇事会反复考虑后再去做，导致不能及时作出决定，看似缺点，实则是让对方知道，你是一个善于思考，做事谨慎的人，符合这个岗位的要求。
-
- 
-
-**Turning Circle**
-
-在那个时候跳一跳比较火，我自己也在玩，那个时候我就想这能不能自己设计一款游戏。
-主要使用的语言是JavaScript和TypeScript
-说出自己游戏的玩法。
-游戏的所需的四个场景
-加载界面（**如何设计**，并开始播放音乐）
-开始界面（点击按钮开始游戏）
-游戏界面（两个小球可以在一个中心点固定半径的圆上相反方向旋转，我们通过点击屏幕和**长按屏幕**来实现旋转来躲避障碍物，每躲避一个记1分。利用线程池生成障碍物，为什么用线程池。如何生成障碍物，让障碍物“下落”给人小球在前进的感觉。玩家分越高障碍物生成得越快。）
-结束界面（游戏的分数，最高得分（哈希表），所有玩家的最高得分的排行榜（小顶堆，大小为10），点击按钮再玩一次）
-
-游戏的缺陷：
-1.障碍物设计的不够巧妙，就是游戏玩法上有待改进。
-2.游戏设计的不够精美
 
  
 
