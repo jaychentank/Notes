@@ -2091,6 +2091,132 @@ Raft结构体是对Raft节点的一个抽象，每一个Raft实例可表示一�
 
 ### 选举
 
+~~~go
+// raft.go
+func Make(peers []*labrpc.ClientEnd, me int,
+    persister *Persister, applyCh chan ApplyMsg) *Raft {
+    rf := &amp;Raft{}
+    rf.peers = peers
+    rf.persister = persister
+    rf.me = me
+    rf.votedFor = -1
+    rf.state = Follower
+    rf.currentTerm = 0
+    rf.leaderId = -1
+    rf.applyCh = applyCh
+    rf.readPersist(persister.ReadRaftState())
+    // start ticker goroutine to start elections
+    go rf.ticker()
+    return rf
+}
+~~~
+
+Make函数负责新建一个Raft节点，节点初始化时为追随者状态，且拥有选票(votedFor为-1)，并且任期为0。
+
+~~~go
+// raft.go
+func (rf *Raft) ticker() {
+    for rf.killed() == false {
+        time.Sleep(getRandElectTimeout())
+        rf.mu.Lock()
+        // 如果已经是 leader 了，则跳过下面逻辑
+        if rf.state == Leader {
+            rf.mu.Unlock()
+            continue
+        }
+        rf.becomeCandidate()
+        var votes int32 = 1 // 自己的一票
+        for peerId, _ := range rf.peers {
+            if peerId == rf.me { // 跳过自己，向其它节点发送请求
+                continue
+            }
+            go rf.sendRequestVoteToPeer(peerId, &amp;votes)
+        }
+        rf.mu.Unlock()
+    }
+}
+~~~
+
+ticker里追随者超时成为候选人。节点成为候选人后，会向集群中的其它节点发送投票RPC请求，即sendRequestVoteToPeer函数。
+
+~~~go
+type RequestVoteArgs struct {
+    Term        int  // 请求者任期
+    CandidateId int  // 请求者 id
+}
+type RequestVoteReply struct {
+    Term        int  // 回复者任期
+    VoteGranted bool // 是否投票，true 则投票
+}
+~~~
+
+RequestVoteArgs是RequestVote RPC请求参数，RequestVoteReply是响应结果。请求者通过sendRequestVote函数向某个节点发送RequestVote RPC请求：
+
+~~~go
+func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *RequestVoteReply) bool {
+    ok := rf.peers[server].Call("Raft.RequestVote", args, reply)
+    return ok
+}
+~~~
+
+其它节点受到请求后，会自动调用RequestVote函数进行处理：
+
+~~~go
+func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
+    rf.mu.Lock()
+    defer rf.mu.Unlock()
+    reply.Term = rf.currentTerm
+    reply.VoteGranted = false
+    if args.Term < rf.currentTerm {
+        return
+    }
+    // 发现任期大的，成为 follower
+    if args.Term > rf.currentTerm {
+        rf.becomeFollower(args.Term)
+    }
+    if rf.votedFor == -1 || rf.votedFor == args.CandidateId {
+        reply.VoteGranted = true
+        rf.votedFor = args.CandidateId // 投票后，记得更新 votedFor
+    }
+}
+~~~
+
+sendRequestVoteToPeer这个函数中，协调者通过该函数向其它节点发送投票请求，并在函数中对请求结果进行处理
+
+~~~go
+func (rf *Raft) sendRequestVoteToPeer(peerId int, votes *int32) {
+    rf.mu.Lock()
+    args := RequestVoteArgs{
+        Term:        rf.currentTerm,
+        CandidateId: rf.me,
+    }
+    reply := RequestVoteReply{}
+    rf.mu.Unlock()
+    ok := rf.sendRequestVote(peerId, &amp;args, &amp;reply)
+    if !ok {
+        return
+    }
+    rf.mu.Lock()
+    defer rf.mu.Unlock()
+    // 如果当前的状态不为 candidate，那么将不能接受选票，所以直接返回
+    if rf.state != Candidate || args.Term != rf.currentTerm {
+        return
+    }
+    if reply.Term > rf.currentTerm {
+        rf.becomeFollower(reply.Term)
+        return
+    }
+    if reply.VoteGranted {
+        atomic.AddInt32(votes, 1)
+        curVotes := int(atomic.LoadInt32(votes))
+        if curVotes >= (len(rf.peers)+1)/2 {
+            rf.becomeLeader()
+            return
+        }
+    }
+}
+~~~
+
 **任期大的节点对任期小的拥有绝对的话语权，一旦发现任期大的节点，立马成为其追随者**。
 
 ### 小结
@@ -2390,3 +2516,289 @@ func (rf *Raft) sendAppendEntriesToPeer(peerId int) {
 对于commitIndex的更新，我们新增了一个判断条件：新的提交日志序号的任期必须与节点当前任期一致。在论文Figure 8中有其说明，主要是为了保证领导者只能提交自己任期的日志，不能提交其它任期日志，从而保证原来任期的日志不会被覆盖。
 
 ## 快照
+
+![49c22b46e8a3d5477caa3057665472c1.png](MIT 6.824.assets/49c22b46e8a3d5477caa3057665472c1.png)
+
+x，y值有多条日志，但实际上大部分日志都是可被删除的，因此快照机制直接将1～5号日志融合，合并成一个快照块。
+
+快照块的存储方式与日志不同，主要分为三个部分：
+
+lastIncludeIndex，快照块所包含的最后一个日志序号，即图中5。
+
+lastIncludeTerm，快照块所包含的最后一个日志任期，即图中3。
+
+state，状态机数据，由上层应用来处理，Raft节点不做处理。
+
+**在快照后，日志切片会发生截断，日志切片序号与日志序号会有不兼容问题**
+
+![3171fd7af881195e6edacdbf8c64e466.png](MIT 6.824.assets/3171fd7af881195e6edacdbf8c64e466.png)
+
+日志经过快照后，切片序号仍然是1、2、3(0 号作为占位，无实际意义)，但是日志序号却是11、12、13，因此如果再使用日志序号来从日志切片中获取日志，需有一个转换操作：**切片序号=日志序号-lastIncludeIndex**。
+
+我们需要重构rLog这个结构体和其方法。
+
+~~~go
+type rLog struct {
+   Entries           []LogEntry
++   LastIncludedIndex int
++   LastIncludedTerm  int
+}
+func defaultRLog() rLog {
+   return rLog{
+      Entries: []LogEntry{
+         {
+            Term:    0,
+            Command: nil,
+         },
+      },
++      LastIncludedIndex: 0,
++      LastIncludedTerm:  0,
+   }
+}
+func (l *rLog) entryAt(index int) LogEntry {
++   if index < l.LastIncludedIndex || index > l.LastIncludedIndex+len(l.Entries) {
++      panic(fmt.Sprintf("lastIncludeIndex: %d, but index: %d is invalid", l.LastIncludedIndex, index))
++   }
++   return l.Entries[index-l.LastIncludedIndex]
+}
+// 最后序号
+func (l *rLog) last() int {
+   if len(l.Entries) == 0 {
+      return 0
+   }
++   return len(l.Entries) + l.LastIncludedIndex - 1
+}
+// 最后任期
+func (l *rLog) lastTerm() int {
++   return l.Entries[l.last()-l.LastIncludedIndex].Term
+}
+// 第一个序号
+func (l *rLog) first() int {
++   return l.LastIncludedIndex
+}
+// 日志长度
+func (l *rLog) size() int {
++   return len(l.Entries) + l.LastIncludedIndex
+}
+~~~
+
+同时，Raft节点需要新增一个snapshopt字段用来保存快照数据：
+
+~~~go
+type Raft struct {
+   // 省略
++   snapshot []byte
+}
+func Make(peers []*labrpc.ClientEnd, me int,
+   persister *Persister, applyCh chan ApplyMsg) *Raft {
+   rf := &Raft{}
+   // 省略
+   rf.readPersist(persister.ReadRaftState())
++   rf.snapshot = persister.ReadSnapshot()
++   rf.commitIndex = rf.log.LastIncludedIndex
++   rf.lastApplied = rf.log.LastIncludedIndex
+   // 省略
+   return rf
+}
+~~~
+
+**现在，我们来解决最后两个问题：何时快照？快照如何执行？**
+
+### 何时快照
+
+- 上层应用发送快照数据给Raft实例。
+- 领导者发送快照RPC请求给追随者。
+
+对于第一点，状态机在上层应用中，因此上层应用知道状态机数据以及日志应用情况，当上层应用觉得日志序号过大(或者其它触发情况)，就会将状态机数据、日志应用号通过Snapshot函数发送给Raft实例，如下：
+
+~~~go
+func (rf *Raft) Snapshot(index int, snapshot []byte) {
+   rf.mu.Lock()
+   defer rf.mu.Unlock()
+   // 拒绝快照过的，也拒绝还未提交的
+   if index <= rf.log.LastIncludedIndex || index > rf.commitIndex {
+      return
+   }
+   rf.log.Entries = append([]LogEntry{{Term: 0, Command: nil}}, rf.log.Entries[index-rf.log.LastIncludedIndex+1:]...)
+   rf.log.LastIncludedIndex = index
+   rf.log.LastIncludedTerm = rf.log.entryAt(index).Term
+   rf.snapshot = snapshot
+   rf.persistStateAndSnapshot(snapshot)
+}
+~~~
+
+任何一个节点都可由上层应用通过Snapshot函数调用来执行快照。如果一个新加入集群的追随者，其日志大幅度落后领导者，如果仅靠日志同步请求来，那么是不够快的(还得一个一个日志的应用)，这个时候领导者可以选择将快照发给追随者，追随者直接使用快照就能迅速与其它节点保持数据一致。
+
+因此对于领导者，还有另外一个InstallSnapshot RPC请求：
+
+~~~go
+type InstallSnapshotArgs struct {
+   Term              int
+   LeaderId          int
+   LastIncludedIndex int
+   LastIncludedTerm  int
+   Data              []byte
+}
+type InstallSnapshotReply struct {
+   Term int
+}
+~~~
+
+领导者发送RPC时，需携带本次快照请求的快照数据、LastIncludedIndex、LastIncludedTerm以及任期，而追随者只需回复自己的任期即可，因此对于追随者而言即使快照请求失败也不会有其它影响，而任期代表着话语权，这与其它RPC请求一样。与AppendEntries类似，领导者通过sendInstallSnapshot函数发送快照请求，RPC达到时会调用InstallSnapshot函数进行处理：
+
+~~~go
+// peer 接受 leader InstallSnapshot 请求
+func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
+   rf.mu.Lock()
+   defer rf.mu.Unlock()
+   reply.Term = rf.currentTerm
+   if args.Term < rf.currentTerm {
+      return
+   }
+   // Send the entire snapshot in a single InstallSnapshot RPC.
+   // Don't implement Figure 13's offset mechanism for splitting up the snapshot.
+   if args.Term > rf.currentTerm {
+      rf.becomeFollower(args.Term)
+      rf.persist()
+   }
+   if rf.state != Follower {
+      rf.becomeFollower(args.Term)
+      rf.persist()
+   }
+   rf.leaderId = args.LeaderId
+   rf.lastReceivedFromLeader = time.Now()
+   // 拒绝，如果你的小，证明我已经快照过了，无需再次快照
+   if args.LastIncludedIndex <= rf.log.LastIncludedIndex {
+      return
+   }
+   msg := ApplyMsg{
+      SnapshotValid: true,
+      Snapshot:      args.Data,
+      SnapshotTerm:  args.LastIncludedTerm,
+      SnapshotIndex: args.LastIncludedIndex,
+   }
+   go func() {
+      // 应用快照 msg
+      rf.applyCh <- msg
+   }()
+}
+// 发送 InstallSnapshot
+func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
+   ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
+   return ok
+}
+~~~
+
+同时，领导者在发现某个节点同步日志序号落后LastIncludedIndex的情况下就会决定发送快照
+
+~~~go
+func (rf *Raft) ping() {
+   for rf.killed() == false {
+      // 省略
+      for peerId, _ := range rf.peers {
+         // 省略
+         // 当 leader 发现一个 follower 的 nextIndex[follower] - 1, 即 prevLogIndex
+         // 小于 leader 节点的快照时刻时，就会通过 RPC 调用发快照过去
++         prevLogIndex := rf.nextIndex[peerId] - 1
++         if prevLogIndex < rf.log.LastIncludedIndex {
++            go rf.sendInstallSnapshotToPeer(peerId)
++         } else {
++            go rf.sendAppendEntriesToPeer(peerId)
++         }
+      }
+      // 省略
+   }
+}
+~~~
+
+### 快照如何执行
+
+- 上层应用通过Snapshot函数来执行快照；
+
+- 上层应用通过CondInstallSnapshot函数来执行快照。
+
+追随者收到快照请求后，并没有立即更新snapshot、log等数据，而是将其包装为了ApplyMsg发送给了上层应用。那是因为如果Raft实例单独应用了快照，而上层应用不知道，那么就会造成二者的数据不统一。收到ApplyMsg后，上层应用会调用CondInstallSnapshot函数来真正的应用快照。
+
+~~~go
+func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
+   rf.mu.Lock()
+   defer rf.mu.Unlock()
+   // 已快照过了，拒绝
+   if lastIncludedIndex <= rf.commitIndex {
+      return false
+   }
+   // 快照后的处理工作
+   defer func() {
+      rf.log.LastIncludedIndex = lastIncludedIndex
+      rf.log.LastIncludedTerm = lastIncludedTerm
+      rf.snapshot = snapshot
+      rf.commitIndex = lastIncludedIndex
+      rf.lastApplied = lastIncludedIndex
+      rf.persistStateAndSnapshot(snapshot) // 持久化快照
+   }()
+   // 删除掉 lastIncludedIndex 之前的日志记录
+   if lastIncludedIndex <= rf.log.last() && rf.log.entryAt(lastIncludedIndex).Term == lastIncludedTerm {
+      // [rf.log.LastIncludedIndex, lastIncludedIndex) 是当前 snapshot 中的日志数据，所以应该删除
+      // 前面需要一个占位
+      rf.log.Entries = append([]LogEntry{{Term: 0, Command: nil}}, rf.log.Entries[lastIncludedIndex-rf.log.LastIncludedIndex+1:]...)
+      return true
+   }
+   // 快照，删除所有 log entries
+   rf.log.Entries = []LogEntry{{Term: 0, Command: nil}}
+   return true
+}
+~~~
+
+**注意，CondInstallSnapshot还需要判断快照任期是否一致，否则删除所有日志。另外，为什么 CondInstallSnapshot中更新了commitIndex，lastApplied，而 Snapshot却没有？**
+
+因为Snapshot是由上层应用直接触发的，建立在当前Raft实例的基础上，而CondInstallSnapshot虽然也是上层应用来调用，但却是领导者触发的，因此追随者的commitIndex，lastApplied字段需要与快照保持一致。
+
+### 完善日志同步
+
+在引入了lastIncludeIndex以后，日志同步可能与快照之间相互冲突，例如快照更新了lastIncludeIndex的同时AppendEntries在发送日志，却不知道日志发生了截断，因此在取日志数据的时候会发生冲突，我们可以在日志发送前对其判断一次：
+
+~~~go
+func (rf *Raft) sendAppendEntriesToPeer(peerId int) {
+   // 省略
+   nextIndex := rf.nextIndex[peerId]
+   prevLogTerm := 0
+   prevLogIndex := 0
+   entries := make([]LogEntry, 0)
+   // 可能会存在 nextIndex 超过 rf.log 的情况
+   if nextIndex <= rf.log.size() {
+      prevLogIndex = nextIndex - 1
+   }
+   // double check，检查 prevLogIndex 与 lastIncludeIndex
++   if rf.log.LastIncludedIndex != 0 && prevLogIndex < rf.log.LastIncludedIndex {
++      rf.mu.Unlock()
++      return
++   }
+   // 省略
+}
+~~~
+
+在LastIncludedIndex非0，即已经发生了快照的情况下，如果待同步日志序号小，那么直接返回，本次日志无需同步，快照中已经存在了。另外追随者在受到日志同步请求时，发现同步日志的序号小于自己的LastIncludedIndex时，会直接将LastIncludedIndex作为ConflictIndex返回给领导者。
+
+~~~go
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+   // 省略
+   rf.leaderId = args.LeaderId
+   rf.lastReceivedFromLeader = time.Now()
++   if args.PrevLogIndex < rf.log.LastIncludedIndex {
++      reply.ConflictIndex = rf.log.LastIncludedIndex
++      reply.ConflictTerm = -1
++      return
+   }
+   // 省略
+}
+~~~
+
+### 小结
+
+快照主要工作可总结如下：
+
+- 1个RPC请求和处理，用于快照。
+
+- 两个快照应用函数CondInstallSnapshot和Snapshot。
+
+- 完善日志同步，加入LastIncludedIndex判断。
