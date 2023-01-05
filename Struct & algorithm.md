@@ -280,6 +280,8 @@ vector<Point> convex_hull(vector<Point> p, int n)    //求点集p的凸包，函
 
 5. 在一场长度为n的数组上[0,n - 1],初始你选择一个位置x，然后跳到(x + d)%n 的位置上，显然这个是有循环的，当且仅当gcd(n,d) = 1 的时候，循环长度为 n
 
+6. a个数分为连续的b段即C(a - 1, b - 1)，这里需要特判a=0, b=0的情况（=1）
+
 ### 计数质数
 
 计算所有小于n的质数数量
@@ -439,11 +441,11 @@ int init = []() {
 }();
 
 ll C(int n, int r) {
-	if (r > n) return 0;
+	if (r > n || r < 0) return 0;
 	return F[n] * I[r] % mod * I[n - r] % mod;
 }
 ll A(int n, int r) {
-	if (r > n) return 0;
+	if (r > n || r < 0) return 0;
 	return F[n] * I[r] % mod;
 }
 ~~~
@@ -789,16 +791,6 @@ forn(i, n) {
 
 ### 树的基础
 
-#### 树的重心
-
-**定义**：计算无根树每个点为根节点时的最大子树大小
-
-**性质**：树中所有点到某个点的**距离和**中，到重心的距离和是最小的；如果有两个重心，那么到它们的距离和一样。反过来，距离和最小的点一定是重心。
-
-#### 树的直径
-
-任意一个点的最远点一定是直径的一个端点
-
 ### 时间戳+lca
 
 ~~~C++
@@ -872,7 +864,6 @@ int lca(int a, int b) {
 t[x]节点覆盖的长度等于lowbit(x)
 
 ```C++
-//还可以维护和修改区间最大值
 class BIT {
 private:
     vector<long long> tree;

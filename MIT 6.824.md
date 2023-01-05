@@ -2051,3 +2051,342 @@ sundr并不是字面上创建快照，文件系统按用户进行分片，每个
 ![image-20221012110412392](MIT 6.824.assets/image-20221012110412392.png)
 
 测试流程要求，**输出的文件个数和参数`nReduce`相同**，即每个输出文件对应一个`reduce`任务，格式和`mrsequential`的输出格式相同，命名为`mr-out*`。我们的代码应保留这些文件，不做进一步合并，测试脚本将进行这一合并。合并之后的最终完整输出，必须和`mrsequential`的输出完全相同。
+
+# Lab 2: Raft
+
+## 介绍
+
+Raft目前是最著名的分布式共识性算法，被广泛的应用在etcd、k8s中。
+
+根据Raft论文，可将Raft拆分为如下**4个功能模块**：
+
+- 领导者选举
+- 日志同步、心跳
+- 持久化
+- 日志压缩，快照
+
+## 领导者选举
+
+### 节点状态
+
+~~~go
+// raft.go
+type Raft struct {
+    mu        sync.Mutex          // 锁
+    peers     []*labrpc.ClientEnd // 集群信息
+    persister *Persister          // 持久化
+    me        int                 // 当前节点 id
+    dead      int32               // 是否死亡，1 表示死亡，0 还活着
+ 
+ 
+    state       PeerState     // 节点状态
+    currentTerm int           // 当前任期
+    votedFor    int           // 给谁投过票
+    leaderId    int           // 集群 leader id
+    applyCh     chan ApplyMsg // apply message channel
+}
+~~~
+
+Raft结构体是对Raft节点的一个抽象，每一个Raft实例可表示一个Raft节点，每一个节点会有集群元数据(peers)、节点元数据(me、state、currentTerm等)等信息。集群元数据包括集群所有节点的ip和端口。
+
+### 选举
+
+**任期大的节点对任期小的拥有绝对的话语权，一旦发现任期大的节点，立马成为其追随者**。
+
+### 小结
+
+领导者选举主要工作可总结如下：
+
+三个状态，节点状态之间的转换函数。
+
+1个loop——ticker。
+
+1个RPC请求和处理，用于投票。
+
+另外，ticker会一直运行，直到节点被kill，因此集群领导者并非唯一，一旦领导者出现了宕机、网络故障等问题，其它节点都能第一时间感知，并迅速做出重新选举的反应，从而维持集群的正常运行。
+
+## 日志同步
+
+日志同步需要与其它节点进行沟通，对应论文中的AppendEntriesArgs RPC请求
+
+~~~go
+// log.go
+type AppendEntriesArgs struct {
+    Term         int        // leader 任期
+    LeaderId     int        // leader id
+    PrevLogIndex int        // leader 中上一次同步的日志索引
+    PrevLogTerm  int        // leader 中上一次同步的日志任期
+    Entries      []LogEntry // 待同步的日志
+    LeaderCommit int        // 领导者的已知已提交的最高的日志条目的索引
+}
+type AppendEntriesReply struct {
+    Term    int  // 当前任期号，以便于候选人去更新自己的任期号
+    Success bool // 是否同步成功，true 为成功
+}
+~~~
+
+既然领导者需要不断地与追随者同步日志，所以Raft节点使用nextIndex，matchIndex等字段来维护这些信息
+
+~~~go
+type Raft struct {
+    // ....省略
+    state       PeerState
+    currentTerm int           // 当前任期
+    votedFor    int           // 给谁投过票
+    leaderId    int           // 集群 leader id
+    applyCh     chan ApplyMsg // apply message channel
+    // 2B
++   log                    rLog      // 日志
++   lastReceivedFromLeader time.Time // 上一次收到 leader 请求的时间
++   nextIndex              []int     // 下一个待发送日志序号，leader 特有
++   matchIndex             []int     // 已同步日志序号，leader 特有
++   commitIndex            int       // 已提交日志序号
++   lastApplied            int       // 已应用日志序号
+}
+~~~
+
+日志「已提交」与「已应用」的区别：以kv数据库为例，日志中x=5可能已提交，但是并未应用，目前kv数据库中x=1。一旦这条日志被应用后，虽然日志数据没有发生改变，但是x可见值却发生了改变。
+
+### 状态机
+
+已提交的日志被应用后才会生效，那么数据的可见性由何种机制来保证了？Raft使用了状态机来保证相同日志被应用不同节点后，数据是一致的。
+
+![5f3284855253623c96210121cfbd2848.png](MIT 6.824.assets/5f3284855253623c96210121cfbd2848.png)
+
+状态机保证了不同节点在被应用了相同日志后，数据的可见性是一致的，这样就能保证集群数据的一致性，这也是Raft算法的根本目的所在。
+
+### 同步
+
+日志同步是领导者独有的功能，因此在成为领导者后，第一时间就是初始化 nextIndex、matchIndex 并且开始日志同步。
+
+~~~go
+func (rf *Raft) becomeLeader() {
+    rf.state = Leader
+    rf.leaderId = rf.me
++   l := len(rf.peers)
++   rf.nextIndex = make([]int, l)
++   rf.matchIndex = make([]int, l)
++   for i := 0; i < l; i++ {
++      // nextIndex[0] 表示 0 号 peer
++      rf.nextIndex[i] = rf.log.last() + 1 // 初始值为领导者最后的日志序号+1
++      rf.matchIndex[i] = 0                // 初始值为 0，单调递增
++   }
++   go rf.ping()
+}
+~~~
+
+matchIndex初始化值为0，因为他还未与任何节点同步成功过，所以直接为0。
+
+领导者通过ping函数来周期性地向其它节点同步日志(或心跳)。
+
+~~~go
+func (rf *Raft) ping() {
+    for rf.killed() == false {
+        rf.mu.Lock()
+        if rf.state != Leader {
+            rf.mu.Unlock()
+            // 如果不是 leader，直接退出 loop
+            return
+        }
+        for peerId, _ := range rf.peers {
+            if peerId == rf.me {
+                // 更新自己的 nextIndex 和 matchIndex
+                rf.nextIndex[peerId] = rf.log.size()
+                rf.matchIndex[peerId] = rf.nextIndex[peerId] - 1
+                continue
+            }
+            go rf.sendAppendEntriesToPeer(peerId)
+        }
+        rf.mu.Unlock()
+        time.Sleep(heartbeatInterval)
+    }
+}
+~~~
+
+和ticker一样，ping同样是一个死循环，但是领导者独有的。
+
+### 日志应用
+
+按照Raft论文的说法，一旦发现commitIndex大于lastApplied，应该立马将可应用的日志应用到状态机中。
+
+那么如何应用了？答案就是applyCh这个字段。
+
+Raft节点本身是没有状态机实现的，状态机应该由Raft的上层应用来实现，因此我们不会谈论如何实现状态机，只需将日志发送给applyCh这个通道即可。
+
+~~~go
+func (rf *Raft) applyLog() {
+   for rf.killed() == false {
+      time.Sleep(applyInterval)
+      rf.mu.Lock()
+      msgs := make([]ApplyMsg, 0)
+      for rf.commitIndex > rf.lastApplied {
+         rf.lastApplied++ // 上一个应用的++
+         // 超过了则回退，并 break
+         if rf.lastApplied >= rf.log.size() {
+            rf.lastApplied--
+            break
+         }
+         msg := ApplyMsg{
+            CommandValid: true,
+            Command:      rf.log.entryAt(rf.lastApplied).Command,
+            CommandIndex: rf.lastApplied,
+         }
+         msgs = append(msgs, msg)
+      }
+      rf.mu.Unlock()
+      for _, msg := range msgs {
+         rf.applyCh <- msg
+      }
+   }
+}
+~~~
+
+ApplyMsg是应用日志的结构体定义
+
+~~~go
+type ApplyMsg struct {
+   CommandValid bool // 是否有效，无效则不应用
+   Command      interface{} // 日志命令
+   CommandIndex int // 日志序号
+}
+~~~
+
+ApplyMsg会被发送到applyCh通道中，上层服务接收到后，将其应用到状态机中。applyLog同样是通过go关键字开启的一个协程，如下：
+
+### 总结
+
+日志同步主要工作可总结如下：
+
+- 2个loop，ping领导者独有，applyLog所有节点均有，推进日志应用。
+- 1个RPC请求和处理，用于日志同步。
+- 完善选举，加入日志完整度判断。
+
+## 持久化
+
+Raft论文中需要持久化的字段有：currentTerm(当前任期)，votedFor(给谁投过票)，log(日志数据)。数据落盘的编码方式有很多种，这里我们选择比较简单的gob编码（也可以选择json字段）。对于readPersist函数，在Raft节点创建的时候调用它一次。
+
+~~~go
+// 将数据持久化到磁盘
+func (rf *Raft) persist() {
+    w := new(bytes.Buffer)
+    e := labgob.NewEncoder(w)
+    e.Encode(rf.currentTerm)
+    e.Encode(rf.votedFor)
+    e.Encode(rf.log)
+    data := w.Bytes()
+    rf.persister.SaveRaftState(data)
+}
+// 从磁盘中读取数据并解码
+func (rf *Raft) readPersist(data []byte) {
+    if data == nil || len(data) < 1 { 
+        return
+    }
+    r := bytes.NewBuffer(data)
+    d := labgob.NewDecoder(r)
+    var (
+        currentTerm int
+        votedFor    int
+        log         rLog
+    )
+    if d.Decode(&currentTerm) != nil ||
+        d.Decode(&votedFor) != nil ||
+        d.Decode(&log) != nil {
+        DPrintf("decode persisted state err.")
+    } else {
+        rf.currentTerm = currentTerm
+        rf.votedFor = votedFor
+        rf.log = log
+    }
+}
+~~~
+
+**currentTerm、votedFor和log任何一个字段只要发生了更改，立马调用persist函数**。
+
+1. 在投票模块中，节点状态改变、投出选票等操作均会引起这三个字段的改变，在改变后加上persist函数即可。
+2. 在ticker函数中，如果心跳超时节点会自发成为协调者，任期和选票均会发生改变。
+3. 在日志同步模块也会引发日志、状态的改变。
+
+### 优化冲突同步
+
+此前如果同步失败了，更新nextIndex，这个地方比较粗暴，直接回退1，不断的试探。我们换个思路，**在同步发生冲突后，不再靠领导者一点点试探，而是追随者主动告诉领导者冲突的日志序号和任期，下次领导者直接通过冲突序号、任期再次同步即可**。
+
+为此，我们需要给Reply增加两个字段分别表示冲突任期和序号
+
+~~~go
+type AppendEntriesReply struct {
++   ConflictTerm  int // 日志冲突任期
++   ConflictIndex int // 日志冲突序号
+    Term          int // 当前任期号，以便于候选人去更新自己的任期号
+    Success       bool
+}
+~~~
+
+在AppendEntries处理中，如果日志发生了完全冲突，需要遍历日志找到冲突任期、序号：
+
+~~~go
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+   // 省略
+   // 日志、任期冲突直接返回
++   if args.PrevLogIndex >= logSize {
++      reply.ConflictIndex = rf.log.size()
++      reply.ConflictTerm = -1
++      return
++   }
++   if rf.log.entryAt(args.PrevLogIndex).Term != args.PrevLogTerm {
++      reply.ConflictTerm = rf.log.entryAt(args.PrevLogIndex).Term
++      for i := rf.log.first(); i < rf.log.size(); i++ {
++         if rf.log.entryAt(i).Term == reply.ConflictTerm {
++            reply.ConflictIndex = i
++            break
++         }
++      }
++      return
++   }
+  // 省略
+}
+~~~
+
+有了日志冲突任期和序号后，领导者收到同步失败后，就能立马对下一次同步做出调整：
+
+~~~go
+func (rf *Raft) sendAppendEntriesToPeer(peerId int) {
+   // 省略
+   if reply.Success {
+      // 1. 更新 matchIndex 和 nextIndex
+      rf.matchIndex[peerId] = prevLogIndex + len(args.Entries)
+      rf.nextIndex[peerId] = rf.matchIndex[peerId] + 1
+      // 2. 计算更新 commitIndex
+      newCommitIndex := getMajorIndex(rf.matchIndex)
+-      if newCommitIndex > rf.commitIndex {
++      if newCommitIndex > rf.commitIndex && rf.log.entryAt(newCommitIndex).Term == rf.currentTerm {
+         rf.commitIndex = newCommitIndex
+      }
+   } else {
++      if reply.ConflictTerm == -1 {
++         rf.nextIndex[peerId] = reply.ConflictIndex
++      } else {
++         // Upon receiving a conflict response, the leader should first search its log for conflictTerm.
++         // If it finds an entry in its log with that term,
++         // it should set nextIndex to be the one beyond the index of the last entry in that term in its log.
++         lastIndexOfTerm := -1
++         for i := rf.log.last(); i >= rf.log.first(); i-- {
++            if rf.log.entryAt(i).Term == reply.ConflictTerm {
++               lastIndexOfTerm = i
++               break
++            }
++         }
++         // If it does not find an entry with that term, it should set nextIndex = conflictIndex.
++         if lastIndexOfTerm < 0 {
++            rf.nextIndex[peerId] = reply.ConflictIndex
++         } else {
++            // 如果找到了冲突的任期，那么 +1 就是下一个需要同步的
++            rf.nextIndex[peerId] = lastIndexOfTerm + 1
++         }
++      }
+   }
+}
+~~~
+
+对于commitIndex的更新，我们新增了一个判断条件：新的提交日志序号的任期必须与节点当前任期一致。在论文Figure 8中有其说明，主要是为了保证领导者只能提交自己任期的日志，不能提交其它任期日志，从而保证原来任期的日志不会被覆盖。
+
+## 快照
