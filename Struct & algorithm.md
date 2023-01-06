@@ -448,6 +448,10 @@ ll A(int n, int r) {
 	if (r > n || r < 0) return 0;
 	return F[n] * I[r] % mod;
 }
+ll A(int n) {
+    if (n < 0) return 0;
+    return F[n];
+}
 ~~~
 
 时间复杂度O(n)
