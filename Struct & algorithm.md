@@ -74,8 +74,6 @@ right = (x ^ (x + lb)) / lb >> 2;
 ///2是向0取整，正数向下负数向上，>>是向下取整
 ~~~
 
-![image-20221121214645597](Struct & algorithm.assets/image-20221121214645597.png)
-
 # 排序
 
 ## 希尔排序
@@ -284,7 +282,7 @@ vector<Point> convex_hull(vector<Point> p, int n)    //求点集p的凸包，函
 
 ### 计数质数
 
-计算所有小于n的质数数量
+计算所有小于n的质数数量。[2,MX]范围内质数个数O(MX / log MX)
 
 #### 埃氏筛
 
@@ -309,9 +307,7 @@ for (int i = 2; i < n; ++i) {
 
 #### 线性筛/欧拉筛
 
-相较于埃氏筛，我们多维护一个primes数组表示当前得到的质数集合。
-另一点与埃氏筛不同的是，「标记过程」不再仅当 x 为质数时才进行，而是对每个整数 x都进行。对于整数 x，我们不再标记其所有的倍数 x\*x,x\*(x+1),而是只标记质数集合中的数与 x 相乘的数，即x*primes[0],x\*primes[1],....，且在发现x mod primes[i]=0 的时候结束当前标记。
-核心点在于：如果 x可以被primes[i]整除，那么对于合数y=x\*primes[i+1]而言，它一定在后面遍历到x/primes[i]\*primes[i+1]这个数的时候会被标记，其他同理，这保证了每个合数只会被其「最小的质因数」筛去，即每个合数被标记一次。
+每个合数只被划掉一次，且被它的的最小质因子划掉
 
 ~~~C++
 vector<int> primes;
@@ -535,9 +531,20 @@ for(int i=0;i<n;i++)//核心代码
 
 ## 字符串哈希
 
-![image-20220907101309086](Struct & algorithm.assets/image-20220907101309086.png)
+~~~c++
+const int B = 233;
+int get_hash(const string& s) {
+  int res = 0;
+  for (int i = 0; i < s.size(); i++) {
+    res = (ll)(res * B + s[i]) % mod;
+  }
+  return res;
+}
 
-![image-20220907101328201](Struct & algorithm.assets/image-20220907101328201.png)
+bool cmp(const string& s, const string& t) {
+  return get_hash(s) == get_hash(t);
+}
+~~~
 
 ## （0/1）字典树
 

@@ -2802,3 +2802,13 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 - 两个快照应用函数CondInstallSnapshot和Snapshot。
 
 - 完善日志同步，加入LastIncludedIndex判断。
+
+# Lab 3: Fault-tolerant Key/Value Service
+
+考虑这样一个场景，客户端向服务端提交了一条日志，服务端将其在 raft 组中进行了同步并成功 commit，接着在 apply 后返回给客户端执行结果。然而不幸的是，该 rpc 在传输中发生了丢失，客户端并没有收到写入成功的回复。因此，客户端只能进行重试直到明确地写入成功或失败为止，这就可能会导致相同地命令被执行多次，从而违背线性一致性。
+
+对于这个问题，raft 作者介绍了想要实现线性化语义，就需要保证日志仅被执行一次，即它可以被 commit 多次，但一定只能 apply 一次。
+
+基本思路便是：
+
+- 每个 client 都需要一个唯一的标识符，它的每个不同命令需要有一个顺序递增的 commandId，clientId 和这个 commandId，clientId 可以唯一确定一个不同的命令，从而使得各个 raft 节点可以记录保存各命令是否已应用以及应用以后的结果。
