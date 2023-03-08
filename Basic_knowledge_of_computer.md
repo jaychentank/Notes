@@ -9345,23 +9345,6 @@ Buffer Pool 的大小是有限的，对于一些频繁访问的数据我们希�
 
 该算法的思路是，链表头部的节点是最近使用的，而链表末尾的节点是最久没被使用的。那么，当空间不够了，就淘汰最久没被使用的节点，从而腾出空间。
 
-简单的 LRU 算法的实现思路是这样的：
-
-- 当访问的页在 Buffer Pool 里，就直接把该页对应的 LRU 链表节点移动到链表的头部。
-- 当访问的页不在 Buffer Pool 里，除了要把页放入到 LRU 链表的头部，还要淘汰 LRU 链表末尾的节点。
-
-比如下图，假设 LRU 链表长度为 5，LRU 链表从左到右有 1，2，3，4，5 的页。
-
-![img](Basic_knowledge_of_computer.assets/lru.png)
-
-如果访问了 3 号的页，因为 3 号页在 Buffer Pool 里，所以把 3 号页移动到头部即可。
-
-![img](Basic_knowledge_of_computer.assets/lru2.png)
-
-而如果接下来，访问了 8 号页，因为 8 号页不在 Buffer Pool 里，所以需要先淘汰末尾的 5 号页，然后再将 8 号页加入到头部。
-
-![img](Basic_knowledge_of_computer.assets/lru3.png)
-
 到这里我们可以知道，Buffer Pool 里有三种页和链表来管理数据。
 
 ![img](Basic_knowledge_of_computer.assets/bufferpoll_page.png)
@@ -9407,22 +9390,6 @@ old 区域占整个 LRU 链表长度的比例可以通过 `innodb_old_blocks_pct
 
 **划分这两个区域后，预读的页就只需要加入到 old 区域的头部，当页被真正访问的时候，才将页插入 young 区域的头部**。如果预读的页一直没有被访问，就会从 old 区域移除，这样就不会影响 young 区域中的热点数据。
 
-接下来，给大家举个例子。
-
-假设有一个长度为 10 的 LRU 链表，其中 young 区域占比 70 %，old 区域占比 30 %。
-
-![img](Basic_knowledge_of_computer.assets/lrutwo.drawio.png)
-
-现在有个编号为 20 的页被预读了，这个页只会被插入到 old 区域头部，而 old 区域末尾的页（10号）会被淘汰掉。
-
-![img](Basic_knowledge_of_computer.assets/lrutwo2.png)
-
-如果 20 号页一直不会被访问，它也没有占用到 young 区域的位置，而且还会比 young 区域的数据更早被淘汰出去。
-
-如果 20 号页被预读后，立刻被访问了，那么就会将它插入到 young 区域的头部，young 区域末尾的页（7号），会被挤到 old 区域，作为 old 区域的头部，这个过程并不会有页被淘汰。
-
-![img](Basic_knowledge_of_computer.assets/lrutwo3.png)
-
 虽然通过划分 old 区域 和 young 区域避免了预读失效带来的影响，但是还有个问题无法解决，那就是 Buffer Pool 污染的问题。
 
 > 什么是 Buffer Pool 污染？
@@ -9437,24 +9404,7 @@ old 区域占整个 LRU 链表长度的比例可以通过 `innodb_old_blocks_pct
 select * from t_user where name like "%xiaolin%";
 ```
 
-可能这个查询出来的结果就几条记录，但是由于这条语句会发生索引失效，所以这个查询过程是全表扫描的，接着会发生如下的过程：
-
-- 从磁盘读到的页加入到 LRU 链表的 old 区域头部；
-- 当从页里读取行记录时，也就是页被访问的时候，就要将该页放到 young 区域头部；
-- 接下来拿行记录的 name 字段和字符串 xiaolin 进行模糊匹配，如果符合条件，就加入到结果集里；
-- 如此往复，直到扫描完表中的所有记录。
-
-经过这一番折腾，原本 young 区域的热点数据都会被替换掉。
-
-举个例子，假设需要批量扫描：21，22，23，24，25 这五个页，这些页都会被逐一访问（读取页里的记录）。
-
-![img](Basic_knowledge_of_computer.assets/lruthree.drawio.png)
-
-在批量访问这些数据的时候，会被逐一插入到 young 区域头部。
-
-![img](Basic_knowledge_of_computer.assets/lruthree1.png)
-
-可以看到，原本在 young 区域的热点数据 6 和 7 号页都被淘汰了，这就是 Buffer Pool 污染的问题。
+可能这个查询出来的结果就几条记录，但是由于这条语句会发生索引失效，所以这个查询过程是全表扫描的，经过这一番折腾，原本 young 区域的热点数据都会被替换掉。
 
 > 怎么解决出现 Buffer Pool 污染而导致缓存命中率下降的问题？
 
@@ -9495,3 +9445,5 @@ MySQL 是这样做的，进入到 young 区域条件增加了一个**停留在 o
 在我们开启了慢 SQL 监控后，如果你发现**「偶尔」会出现一些用时稍长的 SQL**，这可能是因为脏页在刷新到磁盘时可能会给数据库带来性能开销，导致数据库操作抖动。
 
 如果间断出现这种现象，就需要调大 Buffer Pool 空间或 redo log 日志的大小。
+
+![image-20230309000934318](Basic_knowledge_of_computer.assets/image-20230309000934318.png)
