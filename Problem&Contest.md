@@ -45,74 +45,12 @@ private:
 };
 ~~~
 
-## Codeforces
-
-1. 807 Div.2
-
-   D. Mark and Lightbulbs
-
-   对于一个字符串s，从2,3，…，n−1中选择索引i（满足si−1≠si+1），然后翻转si，返回s变化到t的最小操作数。
-
-   ![image-20220824094644769](Problem&Contest.assets/image-20220824094644769.png)
-
-2. 805 Div.3
-
-   ![image-20220826155542022](Problem&Contest.assets/image-20220826155542022.png)
-
-   ~~~C++
-   vector<int> deg(n);
-   dsu d(2 * n);
-   for (int i = 0; i < n; i++) {
-   	int x, y; cin >> x >> y; x--; y--;
-   	deg[x]++; deg[y]++;
-   	d.unite(x, y + n);
-   	d.unite(x + n, y);
-   }
-   bool flag = true;
-   for (int i = 0; i < n; i++) {
-   	if (deg[i] > 2) {
-   		flag = false;
-   	}
-   	if (d.get(i) == d.get(i + n)) {
-   		flag = false;
-   	}
-   }
-   cout << (flag ? "YES" : "NO") << endl;
-   ~~~
-
 ## Google competition
 
 1. 对于一组点，最左边为l，最右边为r，我们选取(l+r)>>1作为中心点，这样所有的点到中心点总cost最小，结果为|v0-x| + |v1-x| + ... + |vk-x|
 2. 但如果我们想让这组点连续并使总cost最小，假设连续的第一个位置为x，那么结果为：|v0-x| + |v1-(x+1)| + ... + |vk-(x+k-1)|，因此我们只需要让vi-i即可转化为问题1
 
-### kick start 2021
-
-#### Round D
-
-对于区间计数问题可以使用差分。
-
 ### kick start 2019
-
-#### Round A
-
-将一个矩阵A中某些点及离该点曼哈顿距离为lim的所有点统一映射到另一个矩阵B中（其中矩阵A大小为n*n，则映射后的矩阵B大小为4n\*4n）
-点(x,y)及离该点曼哈顿距离为lim的所有点映射到矩阵B的区域为左上角点**(lnx,lny)-**>右下角点**(rnx,rny)**。
-
-~~~C++
-int lnx = max(x - lim + y, 0);
-int lny = max(x - lim - y + m, 0);
-int rnx = max(x + lim + y, 0);
-int rny = max(x + lim - y + m, 0);
-~~~
-
-矩阵B中某个点(x,y)，还原为A中(a,b)
-
-~~~C++
-int a = (x + y - m) / 2, b = x - a;
-assert((x & 1) == ((y + m) & 1))//需要满足的条件
-~~~
-
-这是通过更换坐标系，将矩阵A中的(x,y)映射为矩阵B中的(x+y,x-y+m)
 
 #### Round F
 
@@ -124,27 +62,9 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
 
 ### kick start 2018
 
-#### Round B
-
-能被9整除的数各个位上的数字加起来是9的倍数
-每十个数中一定会有一个数被9整除并且还有一个数字含有9（除了边界情况）
-考虑区间1-123，可以拆分为：1-99、100-119、120-123
-1-99又可以拆分为：1-9（共8个）10-19、20-29…共有1×8×9个满足条件
-100-119中有2×8个满足条件
-120-123中有4个满足条件
-因此总计100个no nine
-考虑更一般的情况，区间1-num：
-则有Σnum[i] * 8 * 9^(num.size()-2-i)，当i=num.size()-1时，需要逐个判断，复杂度为O(logn)
-
 #### Round C
 
-1. **problem B** 
-
-   所有的三角形都是凸多边形。
-
-2. **Problem C**
-
-![image-20220806163944938](Problem&Contest.assets/image-20220806163944938.png)
+所有的三角形都是凸多边形。
 
 #### Round D
 
@@ -165,16 +85,6 @@ assert((x & 1) == ((y + m) & 1))//需要满足的条件
    ![image-20220915191919437](Problem&Contest.assets/image-20220915191919437.png)
 
 2. problem B：一个\*可以匹配0-4个字符，可以将一个\*转化为4个\*，这样就可以正常转换了。
-
-#### Round B
-
-![image-20220915204113132](Problem&Contest.assets/image-20220915204113132.png)
-
-如何找到最佳的选点？某个点的权值+前面所有点的权值>=后面所有点的权值 && 某个点的权值+后面所有点的权值>=前面所有点的权值
-
-![image-20220915204640193](Problem&Contest.assets/image-20220915204640193.png)
-
-
 
 ## Atcoder
 
@@ -217,8 +127,6 @@ function<int(int, int)> dfs = [&](int u, int last) {
 };
 cout << (n + dfs(n, 1)) / 2 << endl;
 ~~~
-
-
 
 ### AtCoder Beginner Contest 265
 

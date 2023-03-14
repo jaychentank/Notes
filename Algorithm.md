@@ -287,6 +287,24 @@ for (int i = 2; i <= n; ++i) {
 
 ![image-20220906231204261](Algorithm.assets/image-20220906231204261.png)
 
+### 曼哈顿距离与切比雪夫距离的互化
+
+#### 曼哈顿距离
+
+![image-20230314111626516](Algorithm.assets/image-20230314111626516.png)
+
+#### 切比雪夫距离
+
+![image-20230314111727523](Algorithm.assets/image-20230314111727523.png)
+
+#### 曼哈顿距离转切比雪夫距离
+
+![image-20230314111827202](Algorithm.assets/image-20230314111827202.png)
+
+#### 切比雪夫距离转曼哈顿距离
+
+![image-20230314111844135](Algorithm.assets/image-20230314111844135.png)
+
 ## 线性代数
 
 ### 矩阵快速幂
@@ -728,6 +746,12 @@ forn(i, n) {
 
 ### 树的基础
 
+#### 树的直径
+
+1. 在此方法中我们采用树形动态规划的方式计算树的直径即可。每次计算以当前节点为根节点形成的子树向下延伸的最远距离 first 与次远距离 second，计算所有的 first+second 的最大值即可。
+
+2. 任意在树上取一个点**P**，找出离这个点最远的另一个点**A**，再找出离**A**最远的点（记为**B**）的距离就是**树的直径**。
+
 ### 时间戳+lca
 
 ~~~C++
@@ -869,40 +893,56 @@ int query(int v, int l, int r, int L, int R) {
 #define val(x) t[x].val
 #define mark(x) t[x].mark
 const int MAXV = 9e6;
-int cnt;
+int cnt; // 初始化为1
 struct node {
     ll val, mark;
     int ls, rs;
 } t[MAXV];
-void push_down(int p, int len) {
+void pushdown(int p, int len = 2) {
     if (len <= 1) return;
     if (!ls(p)) ls(p) = ++cnt;
     if (!rs(p)) rs(p) = ++cnt;
-    val(ls(p)) += mark(p) * (len / 2);
     mark(ls(p)) += mark(p);
-    val(rs(p)) += mark(p) * (len - len / 2);
     mark(rs(p)) += mark(p);
+    // 求max, min
+    // val(ls(p)) += mark(p);
+    // val(rs(p)) += mark(p);
+    // 求和
+    val(ls(p)) += mark(p) * (len / 2);
+    val(rs(p)) += mark(p) * (len - len / 2);
     mark(p) = 0;
 }
-void update(int v, int l, int r, int L, int R, int d) {
-    if (R<l || L>r) return;
+void update(int v, int l, int r, int L, int R, ll val) {
     if (l >= L && r <= R) {
-        val(v) += d * (r - l + 1);
-        mark(v) += d;
+        val(v) += val * (r - l + 1);
+        mark(v) += val;
         return;
     }
+    // 求max, min
+    // pushdown(v);
+    // 求和
     push_down(v, r - l + 1);
     int mid = (l + r - 1) / 2;
-    update(ls(v), l, mid, L, R, d);
-    update(rs(v), mid + 1, r, L, R, d);
+    if (L <= mid) update(ls(v), l, mid, L, R, val);
+    if (R > mid) update(rs(v), mid + 1, r, L, R, val);
+    // 求max, min
+    // val(v) = min(val(ls(v)), val(rs(v)));
+    // 求和
     val(v) = val(ls(v)) + val(rs(v));
 }
 ll query(int v, int l, int r, int L, int R) {
-    if (R<l || L>r) return 0;
     if (l >= L && r <= R) return val(v);
     push_down(v, r - l + 1);
     int mid = (l + r - 1) / 2;
-    return query(ls(v), l, mid, L, R) + query(rs(v), mid + 1, r, L, R);
+    // 求max, min
+    // ll ans = LLONG_MAX;
+    // if (L <= mid) ans = min(ans, query(ls(v), l, mid, L, R));
+    // if (R > mid) ans = min(ans, query(rs(v), mid + 1, r, L, R));
+    //求和
+    ll ans = 0;
+	if (L <= mid) ans = min(ans, query(ls(v), l, mid, L, R));
+    if (R > mid) ans = min(ans, query(rs(v), mid + 1, r, L, R));
+    return 
 }
 ~~~
 
@@ -921,45 +961,49 @@ void build(int v, int l, int r) {
 	build(v << 1 | 1, mid + 1, r);
 	t[v].first = min(t[v << 1].first, t[v << 1 | 1].first);
 }
-void pushdown(int v) {
+void pushdown(int v, int len = 0) {
 	if (t[v].second) {
-		t[v << 1].first += t[v].second;
 		t[v << 1].second += t[v].second;
-
-		t[v << 1 | 1].first += t[v].second;
 		t[v << 1 | 1].second += t[v].second;
-
+		// 求max, min
+        t[v << 1].first += t[v].second;
+        t[v << 1 | 1].first += t[v].second;
+        // 求和
+        // t[v << 1].first += t[v].second * (len - (len >> 1));
+        // t[v << 1 | 1].first += t[v].second * (len >> 1);
+        
 		t[v].second = 0;
 	}
 }
-void update(int v, int l, int r, int L, int R, int val) {
+void update(int v, int l, int r, int L, int R, ll val) {
 	if (R<l || L>r) return;
 	if (L <= l && R >= r) {
 		t[v].first += val;
 		t[v].second += val;
 		return;
 	}
-	pushdown(v);
+	pushdown(v); // 求max, min
+    // pushdown(v, r - l + 1); //求和
 	int mid = (l + r) >> 1;
-	update(v << 1, l, mid, L, R, val);
-	update(v << 1 | 1, mid + 1, r, L, R, val);
-	t[v].first = min(t[v << 1].first, t[v << 1 | 1].first);
+	if (L <= mid) update(v << 1, l, mid, L, R, val);
+	if (R > mid) update(v << 1 | 1, mid + 1, r, L, R, val);
+	t[v].first = min(t[v << 1].first, t[v << 1 | 1].first); // 求max, min
+    // t[v].first = t[v << 1].first + t[v << 1 | 1].first; //求和
 }
 int query(int v, int l, int r, int L, int R) {
 	if (L <= l && R >= r) return t[v].first;
-	if (r < L || l > R) return INT_MAX;
 	pushdown(v);
 	int mid = (l + r) >> 1;
-	return min(query(v << 1, l, mid, L, R), query(v << 1 | 1, mid + 1, r, L, R));
+    ll ans = LLONG_MAX;
+    if (L <= mid) ans = min(ans, query(v << 1, l, mid, L, R));
+    if (R > mid) ans = min(ans, query(v << 1 | 1, mid + 1, r, L, R));
+    // 求和
+    // int ans = 0;
+    // if (L <= mid) ans += query(v << 1, l, mid, L, R);
+    // if (R > mid) ans += query(v << 1 | 1, mid + 1, r, L, R);
+    return ans;
 }
 ~~~
-
-##### 总结
-
-数组不变，区间查询：前缀和
-数组单点修改，区间查询：树状数组
-数组区间修改，单点查询：差分
-数组区间修改，区间查询：线段树
 
 ### 并查集
 
@@ -985,6 +1029,64 @@ public:
         return false;
     }
 };
+~~~
+
+### 珂朵莉树
+
+~~~C++
+struct node
+{
+    ll l, r;
+    mutable ll v; // 这里mutable要写不然可能会CE
+    node(ll l, ll r, ll v) : l(l), r(r), v(v) {} // 构造函数
+    bool operator<(const node &o) const { return l < o.l; } // 重载小于运算符
+};
+set<node> tree;
+
+auto split(ll pos)
+// 若不支持C++14，auto须改为set<node>::iterator
+{
+    auto it = tree.lower_bound(node(pos, 0, 0)); // 寻找左端点大于等于pos的第一个节点
+    // 若不支持C++11，auto须改为set<node>::iterator
+    if (it != tree.end() && it->l == pos) // 如果已经存在以pos为左端点的节点，直接返回
+        return it;
+    it--; // 否则往前数一个节点
+    ll l = it->l, r = it->r, v = it->v;
+    tree.erase(it); // 删除该节点
+    tree.insert(node(l, pos - 1, v)); // 插入<l,pos-1,v>和<pos,r,v>
+    return tree.insert(node(pos, r, v)).first; // 返回以pos开头的那个节点的迭代器
+                                               // insert默认返回值是一个pair，第一个成员是我们要的
+}
+void assign(ll l, ll r, ll v) { // 区间赋值
+    auto end = split(r + 1), begin = split(l); // 顺序不能颠倒，否则可能RE
+    tree.erase(begin, end); // 清除一系列节点
+    tree.insert(node(l, r, v)); // 插入新的节点
+}
+void add(ll l, ll r, ll v) { // 区间加
+    auto end = split(r + 1);
+    for (auto it = split(l); it != end; it++)
+        it->v += v;
+}
+ll kth(ll l, ll r, ll k) { // 求区间k大值
+    auto end = split(r + 1);
+    vector<pair<ll, ll>> v; // 这个pair里存节点的值和区间长度
+    for (auto it = split(l); it != end; it++)
+        v.push_back(make_pair(it->v, it->r - it->l + 1));
+    sort(v.begin(), v.end()); // 直接按节点的值的大小排下序
+    for (int i = 0; i < v.size(); i++) // 然后挨个丢出来，直到丢出k个元素为止
+    {
+        k -= v[i].second;
+        if (k <= 0)
+            return v[i].first;
+    }
+}
+ll sum_of_pow(ll l, ll r, ll x, ll y) { // 区间n次方
+    ll tot = 0;
+    auto end = split(r + 1);
+    for (auto it = split(l); it != end; it++)
+        tot = (tot + qpow(it->v, x, y) * (it->r - it->l + 1)) % y; // qpow自己写一下
+    return tot;
+}
 ~~~
 
 ## st表
