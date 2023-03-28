@@ -21,7 +21,6 @@ int __builtin_parity (unsigned int x)
 //isspace(c)检查字符c是否是空格
 //to_string()数值转为string
 //stoi() string转为int  stoll()转成long long类型
-//static_cast<double>
 //next_permutation用于得到下一个排列，主要是暴力情况
 //iota 递增序列填充
 //nth_element(b.begin(), b.begin() + k, b.end()) b.beign()+k为第k+1个小的元素，小于b.begin()+k的fan
@@ -46,7 +45,6 @@ string str = ss.str();
 tuple<TreeNode*, int, int> t;
 TreeNode* r=get<0>(t);
 int r=get<1>(t),c=get<2>(t);
-
 ~~~
 
 ~~~C++
@@ -69,7 +67,7 @@ getline(cin,s);//会读入一行中的空格
 
 define： 可以⽤来防⽌头⽂件重复引⽤
 
-typedef： 1. 有对应的数据类型，是要进⾏判断的 2. 是在编译、运⾏的时候起作⽤ 3. 在静态存储区中分配空间，在程序运⾏过程中内存中只有⼀个拷⻉
+typedef： 1. 有对应的数据类型，是要进⾏判断的 2. 是 在编译、运⾏的时候起作⽤ 3. 在静态存储区中分配空间，在程序运⾏过程中内存中只有⼀个拷⻉
 
 inline是先将内联函数编译完成⽣成了函数体直接插⼊被调⽤的地⽅，减少了压栈，跳转和返回的操作。没有普通函数调⽤时的额外开销；
 
@@ -142,10 +140,6 @@ for(volatile int i=0; i<100000; i++); // 它会执⾏，不会被优化掉
 
 声明外部变量【在函数或者⽂件外部定义的全局变量】
 
-### static
-
-作⽤：实现多个对象之间的数据共享 （）+ **隐藏**，并且使⽤静态成员还不会破坏隐藏原则；默认初始化为0
-
 ### 前置++与后置++
 
 ~~~C++
@@ -160,7 +154,7 @@ const self operator++(int) {
 }
 ~~~
 
-为了区分前后置，᯿载函数是以参数类型来区分，在调⽤的时候，编译器默默给int指定为⼀个0
+为了区分前后置，重载函数是以参数类型来区分，在调⽤的时候，编译器默默给int指定为⼀个0
 
 1、为什么后置返回对象，⽽不是引⽤
 
@@ -177,6 +171,14 @@ const self operator++(int) {
 ### std::atomic
 
 问题：a++ 和 int a = b 在C++中是否是线程安全的？答案：不是
+
+## 函数指针
+
+![image-20230318104055653](Programming_language.assets/image-20230318104055653.png)
+
+![image-20230318104106287](Programming_language.assets/image-20230318104106287.png)
+
+
 
 ## C++三大特性
 
@@ -307,6 +309,10 @@ class D : public virtual C{}; //sizeof(D):16
 
 2. 设计抽象类（通常称为 ABC）的⽬的，是为了给其他类提供⼀个可以继承的适当的基类。抽象类不能被⽤于实例化对象，它只能作为接⼝使⽤。
 
+抽象基类定义了一组公共的接口，用于规范一类相关的对象或操作的行为。派生类可以继承抽象基类，并实现其中的纯虚函数，以定义自己的具体行为。由于派生类必须实现抽象基类中的纯虚函数，因此它们可以保证具有相同的接口，从而实现代码的复用和可扩展性。
+
+除了纯虚函数外，抽象基类还可以包含实现函数、静态函数、静态变量等。但是，抽象基类不能被实例化，因此它们不能被直接用作对象的类型。相反，抽象基类通常被用作接口的类型，即通过指针或引用来访问对象的行为。
+
 ~~~C++
 class Shape 
 {
@@ -356,9 +362,13 @@ Tri.setHeight(7);
 Tri.getArea(); //17
 ~~~
 
+## 友元函数
+
+![image-20230318103911671](Programming_language.assets/image-20230318103911671.png)
+
 ## 智能指针
 
-### share_ptr
+### shared_ptr
 
 ![image-20230314234439434](Programming_language.assets/image-20230314234439434.png)
 
@@ -456,7 +466,7 @@ dynamic本身只能⽤于存在虚函数的⽗⼦关系的强制类型转换；�
 
 （3）未将基类的析构函数定义为虚函数
 
-当基类指针指向⼦类对象时，如果基类的析构函数不是 virtual，那么⼦类的析构函数将不会被调⽤，⼦类的资源没有正确是释放，因此造成内存泄露。
+当基类指针指向⼦类对象时，如果基类的析构函数不是 virtual，那么⼦类的析构函数将不会被调⽤，⼦类的资源没有正确释放，因此造成内存泄露。
 
 3、什么操作会导致内存泄露?
 
@@ -844,7 +854,7 @@ vector的构造以及内存管理：当我们使⽤push_back插⼊元素在尾�
 
 list属于双向链表，其结点与list本身是分开设计的。
 
-list是⼀个环状的双向链表，同时它也满⾜STL对于“前闭后开”的原则，即在链表尾端可以加上空⽩节点
+list是⼀个环状的双向链表，同时它也满⾜STL对于“前闭后开”的原则，即在链表尾端可以加上空⽩节点。
 
 #### list的迭代器的设计
 
@@ -857,6 +867,7 @@ list是⼀个环状的双向链表，同时它也满⾜STL对于“前闭后开�
 ⽀持快速随机访问，由于deque需要处理内部跳转，因此速度上没有vector快。
 
 1、deque概述：
+
 deque是⼀个双端开⼝的连续线性空间，其内部为分段连续的空间组成，随时可以增加⼀段新的空间并链接
 
 注意:
@@ -940,7 +951,7 @@ unordered_map：优点：
 
 因为unordered_map内部基于哈希表，以（key,value）对的形式存储，因此空间占⽤率⾼。unordered_map的查找、删除、添加的时间复杂度不稳定，平均为O(1)，取决于哈希函数。极端情况下可能为  O(n)。
 
-## 《Effective STL》
+## Effective STL
 
 **1. 慎重选择容器类型**
 
@@ -1184,13 +1195,13 @@ string s(vc.begin(),v.end()+charWrittrn);
 ~~~C++
 vector<C> cs.swap(cs); 
 string s;
-string (s).swap(s);
+string(s).swap(s);
 ~~~
 
 swap还可以删去⼀个容器
 
 ~~~C++
-vector< C>().swap(cs); 
+vector<C>().swap(cs); 
 string s; 
 string().swap(s);
 ~~~
@@ -1199,7 +1210,7 @@ string().swap(s);
 
 在swap的时候，不仅两个容器的元素被交换了，他们的迭代器，指针和引⽤依然有效（string除外），只是他们的元素已经在另⼀个容器⾥⾯。
 
-**21.**  避免使⽤vector< bool >时,⽤deque< bool >和bitset代替它
+**21.** 避免使⽤vector< bool >时,⽤deque< bool >和bitset代替它
 
 对于vector来说：
 
@@ -1207,7 +1218,7 @@ string().swap(s);
 
 第⼆，它并不容纳bool。除此以外，就没有什么要反对的了。
 
-**22.**  理解等价与相等
+**22.** 理解等价与相等
 
 相等基于operator==，⼀旦x==y则返回真，则x与y相等
 
@@ -1215,7 +1226,7 @@ string().swap(s);
 
 !=（x < y)&&!=(y < x)。每个标注关联容器的⽐较函数是⽤户⾃定义的判别式，每个标准关联容器都是通过key_comp 成员函数使排序判别式可被外部使⽤
 
-**23.   熟悉非标准散列容器**
+**23.  熟悉非标准散列容器**
 
 \1.  hashmap
 
@@ -1225,7 +1236,7 @@ string().swap(s);
 
 \4.  hashmultiset
 
-**24.**   为包含指针的关联容器指定⽐较类型，⽽不是⽐较函数，最好是准备⼀个模板
+**24.**  为包含指针的关联容器指定⽐较类型，⽽不是⽐较函数，最好是准备⼀个模板
 
 ~~~C++
 struct Dfl {
@@ -1236,3 +1247,574 @@ struct Dfl {
 }
 ~~~
 
+**25.**  切勿直接修改set或multiset中的键
+
+set/multiset 的值不是const，map的键是const。如何修改元素：
+
+**26.**  考虑⽤排序的vector替代关联容器
+
+当程序使⽤数据结构的⽅式是：设置阶段、查找阶段、重组阶段,使⽤排序的vector容器可能⽐使⽤关联容器的效率要更好⼀点(当在使⽤数据结构的时候，查找操作不与删除添加操作混在⼀起的时候在考虑vector)
+
+**好处：**
+
+消耗更少的内存，运⾏的更快⼀些
+
+当你使⽤vector来模仿map<const k,v>时，存储在vector中的是pair<k,v>，⽽不是pair<const k,v>；需要⾃⼰写3个⾃定义⽐较函数（⽤于排序的⽐较函数，⽤于查找的⽐较函数）
+
+~~~C++
+typedef pair<string, int> Data; 
+class Datacompare {
+public:
+	bool operator()(const Data &lhs, const Data &rhs) const { 
+        return keyless(lhs.first, rhs.first);
+    }//⽤于排序的⽐较函数
+    bool operator()(const Data &lhs, const Data::first_type &k) const {
+ 		return keyless(lhs.first, k)
+ 	}//⽤于查找的⽐较函数
+ 	bool operator()(const Data::first_type &k, const Data &rhs) const {
+ 		return keyless(k, rhs.first)
+ 	}//⽤于查找的⽐较函数
+private:
+ 	bool keyless(const Data::firsttype &k1, const Data::firsttype &k2) const {
+ 		return k1 < k2;
+ 	}//为了保证operator（）的⼀致性
+}
+~~~
+
+**27. **更新⼀个已有的映射表元素
+
+如果要更新⼀个已有的映射表元素，则应该选择operator[]，如果是添加元素，那么最好还是选择insert。
+
+这是因为operator[]会先搜索map中是否已经存在要更新的键值对，如果存在，则会返回该键所对应的值，并将其更新为新的值。如果不存在，则会创建一个新的键值对，并将其插入到map中。
+
+**28.** Iterator
+
+iterator优先于constiterator, reserveiterator, constreserveiterator
+
+![image-20230317161410084](Programming_language.assets/image-20230317161410084.png)
+
+**29.** 使⽤distance和advance将容器的const_iterator转换为iterator
+
+~~~C++
+typedef deque<int> IntDeque; 
+typedef IntDeque::iterator Iter;
+typedef IntDeque::const_iterator ConstIter; 
+IntDeque d;
+ConstIter ci;
+...
+Iter i(d.begin());
+advance(i, distance<ConstIter>(i, ci));//使用advance函数将其向前移动了一个距离，该距离等于i和ci之间的距离。
+~~~
+
+**30.** 正确理解由reserve_iterator的base()成员函数所产⽣的iterator的⽤法
+
+reverse_iterator的base()函数可以将其转换为一个普通的迭代器，该迭代器指向原来reverse_iterator所指向的元素的下一个位置。
+
+\1.  对于插⼊操作，ri和ri.base()是等价的
+
+\2.  对于删除操作，ri和ri.base()不是等价的
+
+\3.  v.erase((++ri).base());
+
+**31. istreambuf_iterator**
+
+对于逐个字符的输⼊请考虑使⽤istreambuf_iterator
+
+\1. `ifstream inputFile("sdsdsa.txt");`
+
+\2. `string filedate((istreambufiterator<char>(inputFile),istreambufiterator<char>());`
+
+**32.  如果所使⽤的算法需要指定⼀个⽬标空间**
+
+如果所使⽤的算法需要指定⼀个⽬标空间，确保⽬标区间⾜够⼤或确保它会随着算法的运⾏⽽增⼤。
+
+要在算法执⾏过程中中增⼤⽬标区间，请使⽤插⼊型迭代器：backinserter,frontinserter,ostream_iterator
+
+ostream_iterator可以将元素输出到一个流中，用法如下：
+
+~~~C++
+vector<int> v = {1, 2, 3};
+ostream_iterator<int> out(cout, " ");
+
+copy(v.begin(), v.end(), out);
+~~~
+
+插入型迭代器的优点是，它们可以自动扩展目标区间的大小，从而避免了手动调整目标容器大小的麻烦。此外，插入型迭代器还可以在容器头部和尾部插入元素，使得容器的操作更加灵活。
+
+**33.**  了解各种与排序相关的选择
+
+\1.  如果需要对vector string，deque，或者数组中的元素进⾏⼀次完全排序，那么可以使⽤sort和stable_sort
+
+\2.  如果有⼀个vector，string，deque或者数组，并且只需要对等价性最前⾯的n个元素进⾏排序，那就是可以使⽤partial_sort
+
+\3.  如果有⼀个vector，string，deque或者数组，并且只需要找到第n个位置上的元素，或者，并且只需要找到等价性最前⾯的n个元素，并不需要排序，那么nth_element就⾏
+
+\4.  如果需要将⼀个标准序列容器中的元素按照是否满⾜某个特定区间区分开，那么就选择partition、stable_partition
+
+\5.  如果你的数据在list中，那么你可以选择内置的sort和stablesort算法。同时如果你需要获得partitionsort或nth_element算法的效果可采⽤⼀些间接的方法
+
+\6.  对于排序算法的选择应该基于功能⽽选择，⽽不是基于性能
+
+**34.**  如果要删除元素，需要在remove后⾯使⽤erase
+
+`remove`算法接受两个迭代器作为参数，这两个迭代器定义了容器的范围，以及一个指定移除条件的谓词函数。该算法将容器中所有满足指定条件的元素移到容器的末尾，然后返回一个指向新逻辑结尾的迭代器，而不改变容器的大小。
+
+`remove` 和 `remove_if` 的主要区别在于删除条件的不同。`remove` 删除的条件是元素等于指定值，而 `remove_if` 的删除条件由谓词函数决定。
+
+**35.** 对包含指针的容器使⽤remove这⼀类算法要⼩⼼
+
+原因：由于remove是将那些要被删除的指针被那些不需要被删除的指针覆盖了，所以没有指针指向那些被删除指针所指向的内存和资源，所有资源就泄露了
+
+做法：使⽤智能指针或者在使⽤remove-erase之前⼿动删除指针并把他们置为空
+
+**36. 了解那些算法要求使⽤排序的区间作为参数**
+
+~~~C++
+template<typename InputIterator
+typename OutputIterator
+typename predicate>
+OutputIterator copy_if(InputIterator begin, InputIterator end, OutputIterator destbegin, predicate p) {
+     while (begin != end) {
+     	if (p(*begin))
+     		destbegin++ = begin;
+     	++begin;
+     }
+     return destbegin;
+}
+~~~
+
+**37.** 使⽤accumulate或者for_each进⾏区间统计
+
+\1. accumulate (innerproducet、adjacentdifference、partial_sum)位于< numeric >中 
+
+\2. for_each(区间，函数对象) 
+
+\3. accumulate（begin,end,初始值）；accumulate（初始值，统计函数)
+
+`for_each` 是一个算法函数，它用于遍历容器中的所有元素，并对每个元素执行指定的操作。
+
+~~~C++
+std::vector<int> myVec{1, 2, 3, 4, 5};
+
+std::for_each(myVec.begin(), myVec.end(), [](int i) {
+    std::cout << i << " ";
+});
+~~~
+
+**38. 遵循按值传递的原则来设计函数子类** 
+
+如果做能够允许函数对象可以很⼤、或者保留多态，⼜可以与STL所采⽤的按值传递函数指针的习惯保持⼀致：将 数据和虚函数从函数⼦类中分离出来，放到⼀个新的类中；然后在函数⼦类中包含⼀个指针，指向这⼀个⼼类的对象
+
+~~~c++
+template<typename T>
+class Bs : public:unary_function<T, void> {
+private:
+ 	Weight w;
+ 	int x;
+...
+	virtual ~Bs();
+	virtual void operator()(const T &val) const;
+	friend class B<T>
+}
+template<typename T>
+class B : public:unary_function<T, void> {
+private:
+ 	BS <T> *p;
+public:
+ 	virtual void operator()(const T &val) const {
+ 		p->
+ 		operator()(val);
+ 	}
+}
+~~~
+
+**41.** 确保判别式是“纯函数”
+
+对于⽤作判别式的函数对象，使⽤时它会被拷⻉存起来，然后再使⽤这个拷⻉。这⼀特性要求判别式函数必须是纯函数。
+
+**42.** 使你的函数⼦类可配接
+
+为什么：1.（可配接的函数对象能够与其他STL组件默契的协同⼯作）2.能够让你的函数⼦类拥有必要的类型定义。
+
+为什么：4个标准的函数配接器（not1,not2,bind1st,bind2nd)要求这些类型定义
+
+为什么not1等需要这些定义：能够辅助他们完成⼀些功能
+
+如何使函数可配接：让函数⼦重特定的基类继承：unaryfuntion与binaryfunction
+
+注意： `unaryfuntion<operator所带参数类型，返回类型>` ` binaryfunction<operator 1, operator 2,返回类型>`
+
+**43.** 理解ptrfun && memfun && memfunref
+
+在函数和函数对象被调⽤的时候，总是使⽤⾮成员函数形式发f(),⽽当你使⽤成员函数的形式时x.f(),p->f();
+
+这将通不过编译，所有使⽤上⾯的那些东⻄，就能调整成员函数，使其能够以成员函数的形式调⽤函数和函数对象。
+
+每次将成员函数传给STL组件的时候，就要使⽤他们。
+
+**44.** 确保less< T >与operator<的语义相同
+
+⼀般情况下我们使⽤less< T >都是默认通过operator<来排序。
+
+如果你想要实现不同的⽐较，最好是重新写⼀个类，⽽不是修改特化修改less
+
+**45.** 算法的调⽤优先于⼿写的循环
+
+\1. 效率⾼
+
+\2. ⾃⼰⼿写的循环更容易出错
+
+\3. 算法代码⽐我们⾃⼰写的更简单明了，利于维护
+
+**46.** 容器的成员函数优先于同名函数
+
+\1. 成员函数往往速度快。
+
+\2. 成员函数通常与容器结合地更紧密，这是算法所不能⽐的。
+
+**47.** 正确区分以下关键字
+
+count、find、binarysearch、lowerbound、upperbound、equalrange 
+
+~~~c++
+std::vector<int> myVec{1, 2, 3, 4, 5};
+
+if (std::binary_search(myVec.begin(), myVec.end(), 3)) {
+    std::cout << "Found" << std::endl;
+} else {
+    std::cout << "Not found" << std::endl;
+}
+~~~
+
+~~~c++
+std::vector<int> myVec{1, 2, 2, 3, 3, 3, 4, 5};
+
+auto range = std::equal_range(myVec.begin(), myVec.end(), 3);
+
+for (auto it = range.first; it != range.second; ++it) {
+    std::cout << *it << " ";
+}
+~~~
+
+**48.** 使⽤函数对象作为STL算法的参数
+
+## Effective C++
+
+**条款16：成对使⽤new和delete。**
+
+new创建，delete删除。 new[]创建，[]delete删除
+
+**条款30：了解inline的⾥⾥外外**
+
+\1. inline函数，对函数的每⼀个调⽤都⽤函数本体替代，调⽤不承受额外开销，编译器对其执⾏语境相关最优化。增加⽬标码⼤⼩，额外的换⻚⾏为，降低缓存击中率，效率损失。
+
+\2. 对虚函数进⾏inline⽆意义，虚函数是运⾏时确定，inline是在编译期替换。
+
+\3. 编译器⼀般不对“通过函数指针进⾏调⽤”提供inline，是否inline取决于调⽤的⽅式。
+
+**条款34：区分接⼝继承和实现继承**
+
+public继承由函数接⼝继承+函数实现继承组成。
+
+纯虚函数两个特性：①它们必须被任何继承了它们的具象class重新声明②在抽象class中通常没有定义。声明⼀个纯虚函数的⽬的是为了让派⽣类只继承函数接⼝。
+
+声明⾮纯虚函数的⽬的是让派⽣类继承函数的接⼝和缺省实现。
+
+必须⽀持⼀个虚函数，如果不想重新写⼀个（override），可以使⽤基类提供的缺省版本。
+
+声明⾮虚函数的⽬的是令派⽣类继承函数接⼝和⼀份强制性实现
+
+任何派⽣类都不应该尝试修改次函数，non-virtual函数代表不变性>特异性，不应该在派⽣类被重新定义。
+
+**条款39：明智⽽审慎的使⽤private继承**
+
+如果派⽣类需要访问基类保护的成员，或需要重新定义继承来的虚函数，采⽤private继承。
+
+**条款40：明智⽽审慎的使⽤多重继承**
+
+多继承中实现派⽣类中只有⼀份数据，虚继承。虚继承会增加⼤⼩，速度，初始化等成本。
+
+最好不要使⽤虚继承或者虚基类中不放置数据。
+
+## 泛型编程
+
+### C++模板全特化和偏特化
+
+模板分为类模板与函数模板，特化分为特例化（全特化）和部分特例化（偏特化）。
+
+对模板特例化是因为对特定类型，可以利⽤某些特定知识来提⾼效率，⽽不是使⽤通⽤模板。
+
+**对函数模板：**
+
+\1. 模板和特例化版本应该声明在同⼀头⽂件，所有同名模板的声明应放在前⾯，接着是特例化版本。
+
+\2. ⼀个模板被称为全特化的条件：1.必须有⼀个主模板类  2.模板类型被全部明确化。
+
+模板函数：
+
+~~~C++
+template<typename T1, typename T2>
+void fun(T1 a, T2 b)
+{
+ 	cout<<"模板函数"<<endl;
+}
+template<>
+void fun<int, char>(int a, char b)
+{
+ 	cout<<"全特化"<<endl;
+}
+~~~
+
+函数模板，只有全特化，偏特化的功能可以通过函数的重载完成。
+
+**对类模板：**
+
+~~~c++
+template<typename T1, typename T2>
+class Test
+{
+public:
+	Test(T1 i, T2 j) :a(i), b(j) {
+		cout << "模板类" << endl;
+	}
+private: 
+    T1 a;
+	T2 b;
+};
+
+
+template<>
+class Test<int, char>
+{
+public:
+	Test(int i, char j) :a(i), b(j) { 
+        cout << "全特化" << endl; 
+    } 
+private:
+	int a; char b;
+};
+
+
+template <typename T2> 
+class Test<char, T2>
+{
+public:
+	Test(char i, T2 j) :a(i), b(j) { 
+        cout << "偏特化" << endl; 
+    } 
+private:
+	char a; T2 b;
+}
+~~~
+
+对主版本模板类、全特化类、偏特化类的调⽤优先级从⾼到低进⾏排序是：全特化类>偏特化类>主版本模板类。
+
+## C++11新特性	
+
+### 类型推导
+
+#### auto
+
+auto可以让编译器在编译期就推导出变量的类型
+
+（1）auto的使⽤必须⻢上初始化，否则⽆法推导出类型
+（2）auto在⼀⾏定义多个变量时，各个变量的推导不能产⽣⼆义性，否则编译失败
+（3）auto不能⽤作函数参数
+（4）在类中auto不能⽤作⾮静态成员变量
+（5）auto不能定义数组，可以定义指针
+（6）auto⽆法推导出模板参数
+（7）在不声明为引⽤或指针时，auto会忽略等号右边的引⽤类型和cv限定
+（8）在声明为引⽤或者指针时，auto会保留等号右边的引⽤和cv属性
+
+#### decltype
+
+decltype则⽤于推导表达式类型，这⾥只⽤于编译器分析表达式的类型，表达式实际不会进⾏运算
+
+decltype不会像auto⼀样忽略引⽤和cv属性，decltype会保留表达式的引⽤和cv属性对于decltype(exp)有：
+
+1.	exp是表达式，decltype(exp)和exp类型相同
+2.	exp是函数调⽤，decltype(exp)和函数返回值类型相同
+3.	其它情况，若exp是左值，decltype(exp)是exp类型的左值引⽤
+
+auto和decltype的配合使⽤:
+
+~~~c++
+template<typename T, typename U>
+auto add(T t, U u) -> decltype(t + u) { 
+    return t + u;
+}
+~~~
+
+## 右值引用
+
+左值右值：
+
+左值：  可以放在等号左边，可以取地址并有名字。
+右值： 不可以放在 i 等号左边，不能取地址，没有名字。
+
+字符串字⾯值"abcd"也是左值，不是右值
+++i、--i是左值，i++、i--是右值 
+
+1、将亡值
+
+将亡值是指C++11新增的和右值引⽤相关的表达式。
+
+将亡值可以理解为即将要销毁的值，通过“盗取”其它变量内存空间⽅式获取的值，在确保其它变量不再被使⽤或者即将被销毁时，可以避免内存空间的释放和分配，延⻓变量值的⽣命周期，常⽤来完成移动构造或者移动赋值的特殊任务
+
+2、左值引⽤
+
+左值引⽤就是对左值进⾏引⽤的类型，是对象的⼀个别名
+并不拥有所绑定对象的堆存，所以必须⽴即初始化。 对于左值引⽤，等号右边的值必须可以取地址，如果不能取地址，则会编译失败，或者可以使⽤const引⽤形式
+
+3、右值引⽤
+
+表达式等号右边的值需要是右值，可以使⽤std::move函数强制把左值转换为右值。
+
+4、移动语义
+
+可以理解为转移所有权，对于移动语义，类似于转让或者资源窃取的意思，对于那块资源，转为⾃⼰所拥有，别⼈不再拥有也不会再使⽤。
+通过移动构造函数使⽤移动语义，也就是std::move；移动语义仅针对于那些实现了移动构造函数的类的对象，对于那种基本类型int、float等没有任何优化作⽤，还是会拷⻉，因为它们实现没有对应的移动构造函数。移动后，原对象的值应该被置为默认值，以避免在析构时释放已经被移动的资源。
+
+浅拷⻉：
+
+a和b的指针指向了同⼀块内存，就是浅拷⻉，只是数据的简单赋值；
+
+深拷⻉：
+
+深拷⻉就是再拷⻉对象时，如果被拷⻉对象内部还有指针引⽤指向其它资源，⾃⼰需要重新开辟⼀块新内存存储资源
+
+5、完美转发
+
+写⼀个接受任意实参的函数模板，并转发到其它函数，⽬标函数会收到与转发函数完全相同的实参，通过std::forward()实现
+
+## nullptr
+
+nullptr是⽤来代替NULL，⼀般C++会把NULL、0视为同⼀种东⻄，这取决去编译器如何定义NULL，有的定义为  ((void*)0)，有的定义为0
+C++不允许直接将void隐式转换到其他类型，在进⾏C++重载时会发⽣混乱
+例如：
+
+如果NULL被定义为 ((void*)0)，那么当编译char *ch = NULL时，NULL被定义为 0
+
+当foo(NULL)时，此时NULL为0，会去调⽤foo(int )，从⽽发⽣混乱为解决这个问题，从⽽需要使⽤NULL时，⽤nullptr代替：
+
+C++11引⼊nullptr关键字来区分空指针和0。nullptr 的类型为 nullptr_t，能够转换为任何指针或成员指针的类型，也可以进⾏相等或不等的⽐较。
+
+## 列表初始化
+
+C++定义了⼏种初始化⽅式，例如对⼀个int变量 x初始化为0：
+
+~~~c++
+int x = 0; // method1
+int x = {0}; // method2
+int x{0}; // method3
+int x(0); // method4
+~~~
+
+采⽤花括号来进⾏初始化称为列表初始化，⽆论是初始化对象还是为对象赋新值。 ⽤于对内置类型变量时，如果使⽤列表初始化，且初始值存在丢失信息⻛险时，编译器会报错。
+
+~~~c++
+long double d = 3.1415926536;
+int a = {d}; //存在丢失信息⻛险，转换未执⾏。
+int a = d; //确实丢失信息，转换执⾏。
+~~~
+
+## lambda表达式
+
+lambda表达式表示⼀个可调⽤的代码单元，没有命名的内联函数，不需要函数名因为我们直接（⼀次性的）⽤它，不需要其他地⽅调⽤它。
+
+### 变量捕获才是成就lambda卓越的秘⽅
+
+\1.  [] 不捕获任何变量,这种情况下lambda表达式内部不能访问外部的变量
+
+\2.  [&] 以引⽤⽅式捕获所有变量（保证lambda执⾏时变量存在）
+
+\3.  [=] ⽤值的⽅式捕获所有变量（创建时拷⻉，修改对lambda内对象⽆影响)
+
+\4.  [=, &foo] 以引⽤捕获变量foo, 但其余变量都靠值捕获
+
+\5.  [&, foo] 以值捕获foo, 但其余变量都靠引⽤捕获
+
+\6.  [bar] 以值⽅式捕获bar; 不捕获其它变量
+
+\7.  [this] 捕获所在类的this指针
+
+## 并发
+
+### std::thread
+
+![image-20230318093732636](Programming_language.assets/image-20230318093732636.png)
+
+1、默认构造函数，创建⼀个空的 thread 执⾏对象。
+
+2、初始化构造函数，创建⼀个 thread对象，该 thread对象可被 joinable，新产⽣的线程会调⽤ fn 函数，该函数的参数由 args 给出。
+
+3、拷⻉构造函数(被禁⽤)，意味着 thread 不可被拷⻉构造。
+
+4、move 构造函数，move 构造函数，调⽤成功之后 x 不代表任何 thread 执⾏对象。
+
+**注意：** 可被 joinable 的 thread 对象必须在他们销毁之前被主线程 join 或者将其设置为 detached. std::thread在使⽤上容易出错，即std::thread对象在线程函数运⾏期间必须是有效的。什么意思呢？
+
+~~~c++
+#include <iostream>
+#include <thread>
+void threadproc() {
+ 	while(true) {
+ 		std::cout << "I am New Thread!" << std::endl;
+ 	}
+}
+void func() {
+ 	std::thread t(threadproc);
+}
+int main() {
+ 	func();
+ 	while(true) {} //让主线程不要退出
+ 	return 0;
+}
+~~~
+
+以上代码再main函数中调⽤了func函数，在func函数中创建了⼀个线程，乍⼀看好像没有什么问题，但在实际运⾏是会崩溃。
+
+崩溃的原因是，在func函数调⽤结束后，func中局部变量t（线程对象）被销毁，⽽此时线程函数仍在运⾏。所以在使⽤std::thread类时，必须保证线程函数运⾏期间其线程对象有效。
+
+std::thread对象提供了⼀个detach⽅法，通过这个⽅法可以让线程对象与线程函数脱离关系，这样即使线程对象被销毁，也不影响线程函数的运⾏。
+只需要在func函数中调⽤detach⽅法即可，代码如下：
+
+~~~c++
+// 其他代码保持不变
+void func() {
+	std::thread t(threadproc); t.detach();
+}
+~~~
+
+### lock_guard
+
+lock_guard是⼀个互斥量包装程序，它提供了⼀种⽅便的RAII（Resource acquisition is initialization ）⻛格的机制来在作⽤域块的持续时间内拥有⼀个互斥量。
+
+创建lockguard对象时，它将尝试获取提供给它的互斥锁的所有权。当控制流离开lockguard对象的作⽤域时，
+
+lock_guard析构并释放互斥量。
+
+它的特点如下：
+
+创建即加锁，作⽤域结束⾃动析构并解锁，⽆需⼿⼯解锁
+
+不能中途解锁，必须等作⽤域结束才解锁
+
+不能复制
+
+### unique_lock
+
+unique_lock是⼀个通⽤的互斥量锁定包装器，它允许延迟锁定，限时深度锁定，递归锁定，锁定所有权的转移以及与条件变量⼀起使⽤。
+简单地讲，uniquelock 是 lockguard 的升级加强版，它具有 lock_guard 的所有功能，同时⼜具有其他很多⽅法，使⽤起来更强灵活⽅便，能够应对更复杂的锁定需要。
+
+特点如下：
+
+\1. 创建时可以不锁定（通过指定第⼆个参数为std::defer_lock），⽽在需要时再锁定
+
+\2. 可以随时加锁解锁
+
+\3. 作⽤域规则同 lock_grard，析构时⾃动释放锁
+
+\4. 不可复制，可移动
+
+\5. 条件变量需要该类型的锁作为参数（此时必须使⽤unique_lock）
