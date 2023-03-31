@@ -8841,7 +8841,7 @@ MySQL 的数据都是存在磁盘中的，那么我们要更新一条记录的�
 - 当读取数据时，如果数据存在于 Buffer Pool 中，客户端就会直接读取 Buffer Pool 中的数据，否则再去磁盘中读取。
 - 当修改数据时，如果数据存在于 Buffer Pool 中，那直接修改 Buffer Pool 中数据所在的页，然后将其页设置为脏页（该页的内存数据和磁盘上的数据已经不一致），为了减少磁盘I/O，不会立即将脏页写入磁盘，后续由后台线程选择一个合适的时机将脏页写入到磁盘。
 
-###### Buffer Pool 缓存什么？
+##### Buffer Pool 缓存什么？
 
 InnoDB 会把存储的数据划分为若干个「页」，以页作为磁盘和内存交互的基本单位，一个页的默认大小为 16KB。因此，Buffer Pool 同样需要按「页」来划分。
 
@@ -9457,3 +9457,15 @@ MySQL 是这样做的，进入到 young 区域条件增加了一个**停留在 o
 如果间断出现这种现象，就需要调大 Buffer Pool 空间或 redo log 日志的大小。
 
 ![image-20230309000934318](Basic_knowledge_of_computer.assets/image-20230309000934318.png)
+
+# 其他
+
+**drop turncate delete 的区别联系**
+
+![image-20230328172834909](Basic_knowledge_of_computer.assets/image-20230328172834909.png)
+
+**数据库范式**
+
+![image-20230328173745135](Basic_knowledge_of_computer.assets/image-20230328173745135.png)
+
+路由选择协议-RIP
