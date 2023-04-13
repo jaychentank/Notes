@@ -287,7 +287,7 @@ GFS 通过 snapshot 来创建一个文件或者目录树的备份，它可以用
 
 引用计数用来实现 copy-on-write 生成快照。当 GFS 创建一个快照时，它并不立即复制 chunk，而是增加 GFS 中 chunk 的引用计数，表示这个 chunk 被快照引用了，等到客户端修改这个 chunk 时，才需要在 chunkserver 中拷贝 chunk 的数据生成新的 chunk，后续的修改操作落到新生成的 chunk 上。
 
-# Lecture 04 - VMware ET
+# Lecture 04 - VMware FT
 
 ## 4.1 复制方法：状态转移和复制状态机
 
