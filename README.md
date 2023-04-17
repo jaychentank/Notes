@@ -1,2 +1,2 @@
 # Note
- Struct & Algorithm、Problem & Contest、Course Notes
+仅在这里记录自己的一点学习笔记。
