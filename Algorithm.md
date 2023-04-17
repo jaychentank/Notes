@@ -754,6 +754,8 @@ forn(i, n) {
 
 ### 时间戳+lca
 
+#### 倍增法
+
 ~~~C++
 void init(int& n) {
     dep = vector<int>(n + 1); in = vector<int>(n + 1); out = vector<int>(n + 1);
@@ -808,6 +810,76 @@ int lca(int a, int b) {
     if (fa[a][0] == fa[b][0]) return fa[a][0];
     else return -1;
 
+~~~
+
+#### tarjan算法
+
+~~~C++
+// leetcode 2646
+int minimumTotalPrice(int n, vector<vector<int>>& edges, vector<int>& price, vector<vector<int>>& trips) {
+    vector<vector<int>> g(n);
+    for (auto& e : edges) {
+        int x = e[0], y = e[1];
+        g[x].push_back(y);
+        g[y].push_back(x); // 建树
+    }
+
+    vector<vector<int>> qs(n);
+    for (auto& t : trips) {
+        int x = t[0], y = t[1];
+        qs[x].push_back(y); // 路径端点分组
+        if (x != y) qs[y].push_back(x);
+    }
+
+    // 并查集模板
+    int pa[n];
+    iota(pa, pa + n, 0);
+    function<int(int)> find = [&](int x) -> int { return pa[x] == x ? x : pa[x] = find(pa[x]); };
+
+    int diff[n], father[n], color[n];
+    memset(diff, 0, sizeof(diff));
+    memset(color, 0, sizeof(color));
+    function<void(int, int)> tarjan = [&](int x, int fa) {
+        father[x] = fa;
+        color[x] = 1; // 递归中
+        for (int y : g[x])
+            if (color[y] == 0) { // 未递归
+                tarjan(y, x);
+                pa[y] = x; // 相当于把 y 的子树节点全部 merge 到 x
+            }
+        for (int y : qs[x])
+            // color[y] == 2 意味着 y 所在子树已经遍历完
+            // 也就意味着 y 已经 merge 到它和 x 的 lca 上了
+            if (y == x || color[y] == 2) { // 从 y 向上到达 lca 然后拐弯向下到达 x
+                ++diff[x];
+                ++diff[y];
+                int lca = find(y);
+                --diff[lca];
+                int f = father[lca];
+                if (f >= 0) {
+                    --diff[f];
+                }
+            }
+        color[x] = 2; // 递归结束
+    };
+    tarjan(0, -1);
+
+    function<tuple<int, int, int>(int, int)> dfs = [&](int x, int fa) -> tuple<int, int, int> {
+        int not_halve = 0, halve = 0, cnt = diff[x];
+        for (int y : g[x])
+            if (y != fa) {
+                auto [nh, h, c] = dfs(y, x); // 计算 y 不变/减半的最小价值总和
+                not_halve += min(nh, h); // x 不变，那么 y 可以不变，可以减半，取这两种情况的最小值
+                halve += nh; // x 减半，那么 y 只能不变
+                cnt += c; // 自底向上累加差分值
+            }
+        not_halve += price[x] * cnt; // x 不变
+        halve += price[x] * cnt / 2; // x 减半
+        return { not_halve, halve, cnt };
+    };
+    auto [nh, h, _] = dfs(0, -1);
+    return min(nh, h);
+}
 ~~~
 
 ### 基环树
