@@ -993,7 +993,7 @@ void update(int v, int l, int r, int L, int R, ll val) {
     // 求max, min
     // pushdown(v);
     // 求和
-    push_down(v, r - l + 1);
+    pushdown(v, r - l + 1);
     int mid = (l + r - 1) / 2;
     if (L <= mid) update(ls(v), l, mid, L, R, val);
     if (R > mid) update(rs(v), mid + 1, r, L, R, val);
@@ -1004,7 +1004,9 @@ void update(int v, int l, int r, int L, int R, ll val) {
 }
 ll query(int v, int l, int r, int L, int R) {
     if (l >= L && r <= R) return val(v);
-    push_down(v, r - l + 1);
+    // pushdown(v);
+    // 求和
+    pushdown(v, r - l + 1);
     int mid = (l + r - 1) / 2;
     // 求max, min
     // ll ans = LLONG_MAX;
@@ -1064,7 +1066,8 @@ void update(int v, int l, int r, int L, int R, ll val) {
 }
 int query(int v, int l, int r, int L, int R) {
 	if (L <= l && R >= r) return t[v].first;
-	pushdown(v);
+	pushdown(v); // 求max, min
+    // pushdown(v, r - l + 1); //求和
 	int mid = (l + r) >> 1;
     ll ans = LLONG_MAX;
     if (L <= mid) ans = min(ans, query(v << 1, l, mid, L, R));
