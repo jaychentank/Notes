@@ -197,8 +197,6 @@ vector<Point> convex_hull(vector<Point> p, int n)    //求点集p的凸包，函
 
 5. 在一场长度为n的数组上[0,n - 1],初始你选择一个位置x，然后跳到(x + d)%n 的位置上，显然这个是有循环的，当且仅当gcd(n,d) = 1 的时候，循环长度为 n
 
-6. a个数分为连续的b段即C(a - 1, b - 1)，这里需要特判a=0, b=0的情况（=1）
-
 ![image-20230225203841602](Algorithm.assets/image-20230225203841602.png)
 
 ### 计数质数
@@ -255,6 +253,26 @@ for (int i = 2; i < n; ++i) {
 ~~~C++
 int gcd(int a,int b){
     return b == 0 ? a : gcd(b, a % b);
+}
+// stein算法
+int gcd(int a,int b)
+{
+    if(b > a) return gcd(b, a);
+    if(!b) return a;
+    if(!(a & 1))
+    {
+        if(!(b & 1))
+          return gcd(a >> 1, b>>1) << 1;
+        else
+          return gcd(a >> 1, b);
+    }
+    else
+    {
+        if(!(b & 1))
+            return gcd(a, b>>1);
+        else
+            return gcd((a - b) >> 1,y);
+    }
 }
 ~~~
 
@@ -643,8 +661,6 @@ string Manacher(string s) {
 
 时间复杂度：O(n)    空间复杂度：O(n)
 
-## 扩展kmp
-
 # 数据结构
 
 ## 哈希映射
@@ -899,14 +915,6 @@ int minimumTotalPrice(int n, vector<vector<int>>& edges, vector<int>& price, vec
     return min(nh, h);
 }
 ~~~
-
-### 基环树
-
-从 i 向edges[i] 连边，我们可以得到一张有向图。由于每个大小为 k 的连通块都有 k 个点和 k 条边，所以每个连通块必定有且仅有一个环，且由于每个点的出度均为 1，这样的有向图又叫做内向基环树 (pseudo tree)，由基环树组成的森林叫**基环树森林** (pseudo forest)。
-每一个内向基环树（连通块）都由一个**基环**和其余指向基环的**树枝**组成
-对于内向基环树，每个连通块至多有一个环，我们可以利用时间戳来实现找环的逻辑。
-具体来说，初始时间戳clock=1，首次访问一个点 x 时，记录访问这个点的时间time[x]=clock，然后将 clock 加一。
-如果首次访问一个点，则记录当前时间 startTime=clock，并尝试从这个点出发，看能否找到环。如果找到了一个之前访问过的点 x，且访问 x 的时间不早于startTime，则说明我们找到了一个新的环，此时的环长就是前后两次访问 x 的时间差，即clock−time[x]。
 
 ### 树状数组
 
@@ -1578,32 +1586,6 @@ for (int u = 0; u < n; u++) {
 
 # Atcoder经典dp题
 
-## E - Knapsack 2
-
-~~~C++
-forn(i, n) {
-	int w, v; cin >> w >> v;
-	for (int j = maxn - 1; j >= v; j--) dp[j] = min(dp[j], dp[j - v] + w);
-}
-int ans = 0;
-forn(i, maxn) if (dp[i] <= W) ans = i;
-~~~
-
-## I - Coins
-
-~~~C++
-fort(i, 1, n + 1) {
-	forn(j, i) {
-		dp[i][j + 1] += dp[i - 1][j] * p[i - 1];
-		dp[i][j] += dp[i - 1][j] * (1.0 - p[i - 1]);
-	}
-}
-double ans = 0.0;
-forn(i, n + 1) {
-	if (i > n - i) ans += dp[n][i];
-}
-~~~
-
 ## J - Sushi
 
 ![image-20220817085846121](Algorithm.assets/image-20220817085846121-16817367035341.png)
@@ -1623,74 +1605,6 @@ fort(i, 1, k + 1) {
 	}
 }
 cout << (g[k] ? "First" : "Second") << endl;
-~~~
-
-## L - Deque
-
-~~~C++
-forn(i, n) {
-	cin >> a[i];
-	dp[i][i] = a[i];
-}
-//dp[i][j]表示区间为(i,j)时，两个玩家玩得最优化时，X-Y的结果值
-fort(l, 1, n) {
-	for (int i = 0, j = l; j < n; i++, j++) {
-		dp[i][j] = max(a[i] - dp[i + 1][j], a[j] - dp[i][j - 1]);
-	}
-}
-cout << dp[0][n - 1] << endl;
-~~~
-
-## O - matching(状压dp)
-
-~~~C++
-vl dp(1 << n);
-forn(i, n) {
-    forn(j, n) cin >> a[i][j];
-}
-dp[0] = 1;
-forn(i, n) {
-    forn(j, 1 << n) {//dp[j]为前i个男人匹配了j个女人的方案数
-        if (__builtin_popcount(j) != i) continue;
-        forn(xx, n) {
-            if (a[i][xx] && !((j >> xx) & 1))
-                dp[j + (1 << xx)] = (dp[j + (1 << xx)] + dp[j]) % mod;
-        }
-    }
-}
-cout << dp.back() << endl;
-~~~
-
-## Q - Flowers
-
-dp[i]为取第i朵花时的最大价值，在求要第i支花时的最大值时，要找到他前边比他矮的花的价值最大值，然后dp[i]=dp[j]+v[i]，在找dp[j]时，不能遍历。因为高度在1−n这个范围里，所以可以建立一个树状数组来存储前i个花的价值，这样就可以在`lognlogn`的时间内求出前i支花中高度在1−(w[i]−1)的价值的最大值。
-
-~~~C++
-//用树状数组修改和维护区间最大值
-auto lowbit = [&](ll x) {
-    return x & (-x);
-};
-auto update = [&](ll m, ll x) {
-    while (m <= n) {
-        f[m] = max(f[m], x);
-        m += lowbit(m);
-    }
-};
-auto query = [&](ll m) {
-    ll res = 0;
-    while (m > 0) {
-        res = max(res, f[m]);
-        m -= lowbit(m);
-    }
-    return res;
-};
-
-ll ans = 0;
-forn(i, n) {
-    dp[i] = a[i] + query(h[i]);
-    ans = max(ans, dp[i]);
-    update(h[i], dp[i]);
-}
 ~~~
 
 ## R - Walk
@@ -1720,113 +1634,6 @@ fort(i, 1, n) {
 ll res = 0;
 fort(i, 1, n + 1) res = (res + f[n][i]) % mod;
    ~~~
-
-## U - Grouping(状压dp)
-
-~~~c++
-fort(k, 1, 1 << n) {
-    forn(i, n) {
-        fort(j, i + 1, n) {
-            if ((k >> i & 1) && (k >> j & 1)) {
-                dp[k] += a[i][j];
-            }
-        }
-    }
-    for (int j = k & (k - 1); j; j = (j - 1) & k) {
-        dp[k] = max(dp[k], dp[k ^ j] + dp[j]);
-    }
-}
-~~~
-
-## V - Subtree
-
-![image-20220906193909696](Algorithm.assets/image-20220906193909696.png)
-
-~~~C++
-function<void(int, int)> dfs1 = [&](int u, int p) {
-    f[u] = 1;
-    for (int& v : G[u]) {
-        if (v != p) {
-            dfs1(v, u);
-            f[u] = ((ll)f[u] * (f[v] + 1)) % m;
-        }
-    }
-    pre[u] = vi(G[u].size(), 1);
-    suf[u] = vi(G[u].size(), 1);
-    fort(i, 1, G[u].size()) {
-        pre[u][i] = pre[u][i - 1];
-        if (G[u][i - 1] != p) {
-            pre[u][i] = ((ll)pre[u][i] * (f[G[u][i - 1]] + 1)) % m;
-        }
-    }
-    rfort(i, G[u].size() - 2, 0) {
-        suf[u][i] = suf[u][i + 1];
-        if (G[u][i + 1] != p) {
-            suf[u][i] = ((ll)suf[u][i] * (f[G[u][i + 1]] + 1)) % m;
-        }
-    }
-};
-function<void(int, int)> dfs2 = [&](int u, int p) {
-    forn(i, G[u].size()) {
-        int v = G[u][i];
-        if (v != p) {
-            g[v] = ((((ll)pre[u][i] * suf[u][i]) % m) * g[u]) % m + 1;
-            dfs2(v, u);
-        }
-    }
-};
-dfs1(0, 0);
-g[0] = 1;
-dfs2(0, 0);
-forn(i, n) cout << ((ll)g[i] * f[i]) % m << endl;
-~~~
-
-## W - Intervals
-
-![image-20220907192141599](Algorithm.assets/image-20220907192141599.png)
-
-~~~C++
-void pushdown(int v) {
-	if (t[v].second) {
-		t[v << 1].first += t[v].second;
-		t[v << 1].second += t[v].second;
-
-		t[v << 1 | 1].first += t[v].second;
-		t[v << 1 | 1].second += t[v].second;
-
-		t[v].second = 0;
-	}
-}
-void update(int v, int l, int r, int L, int R, ll val) {
-	if (R<l || L>r) return;
-	if (L <= l && R >= r) {
-		t[v].first += val;
-		t[v].second += val;
-		return;
-	}
-	pushdown(v);
-	int mid = (l + r) >> 1;
-	update(v << 1, l, mid, L, R, val);
-	update(v << 1 | 1, mid + 1, r, L, R, val);
-	t[v].first = max(t[v << 1].first, t[v << 1 | 1].first);
-}
-void solve() {
-	int n, m; cin >> n >> m;
-	t = vector<pll>(n << 2);
-	vector<vector<pii>> g(n);
-	forn(i, m) {
-		int l, r, a; cin >> l >> r >> a; l--; r--;
-		g[r].push_back({ l,a });
-	}
-	forn(i, n) {
-		update(1, 0, n - 1, i, i, t[1].first);
-		for (auto& [l, a] : g[i]) {
-			update(1, 0, n - 1, l, i, a);
-		}
-	}
-	cout << max(t[1].first, 0LL) << endl;
-}
-~~~
 
 ## X - Tower
 
