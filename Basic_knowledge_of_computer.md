@@ -9830,14 +9830,6 @@ Redis 在执行完一条写操作命令后，就会把该命令以追加的方�
 
 ![img](Basic_knowledge_of_computer.assets/6f0ab40396b7fc2c15e6f4487d3a0ad7-20230309232240301.png)
 
-我这里以「*set name xiaolin*」命令作为例子，Redis 执行了这条命令后，记录在 AOF 日志里的内容如下图：
-
-![img](Basic_knowledge_of_computer.assets/337021a153944fd0f964ca834e34d0f2-20230309232243363.png)
-
-我这里给大家解释下。
-
-「*3」表示当前命令有三个部分，每部分都是以「$+数字」开头，后面紧跟着具体的命令、键或值。然后，这里的「数字」表示这部分中的命令、键或值一共有多少字节。例如，「$3 set」表示这部分有 3 个字节，也就是「set」命令这个字符串的长度。
-
 > 为什么先执行命令，再把数据写入日志呢？
 
 Reids 是先执行写操作命令后，才将该命令记录到 AOF 日志里的，这么做其实有两个好处。
@@ -9967,10 +9959,6 @@ save 60 10000
 
 ![img](Basic_knowledge_of_computer.assets/ebd620db8a1af66fbeb8f4d4ef6adc68-20230309232308604.png)
 
-TIP
-
-RDB 快照的内容就暂时提这些，想更详细了解 RDB 快照的工作原理，可以详细看这篇：[RDB 快照是怎么实现的？(opens new window)](https://xiaolincoding.com/redis/storage/rdb.html)
-
 #### 为什么会有混合持久化？
 
 RDB 优点是数据恢复速度快，但是快照的频率不好把握。频率太低，丢失的数据就会比较多，频率太高，就会影响性能。
@@ -9998,9 +9986,9 @@ AOF 优点是丢失数据少，但是数据恢复不快。
 - AOF 文件中添加了 RDB 格式的内容，使得 AOF 文件的可读性变得很差；
 - 兼容性差，如果开启混合持久化，那么此混合持久化 AOF 文件，就不能用在 Redis 4.0 之前版本了。
 
-## [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-集群)Redis 集群
+### Redis 集群
 
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-如何实现服务高可用)Redis 如何实现服务高可用？
+#### Redis 如何实现服务高可用？
 
 要想设计一个高可用的 Redis 服务，一定要从 Redis 的多服务节点来考虑，比如 Redis 的主从复制、哨兵模式、切片集群。
 
@@ -10020,10 +10008,6 @@ AOF 优点是丢失数据少，但是数据恢复不快。
 
 所以，无法实现强一致性保证（主从数据时时刻刻保持一致），数据不一致是难以避免的。
 
-TIP
-
-想更详细了解 Redis 主从复制的工作原理，可以详细看这篇：[主从复制是怎么实现的？(opens new window)](https://xiaolincoding.com/redis/cluster/master_slave_replication.html)
-
 > 哨兵模式
 
 在使用 Redis 主从服务的时候，会有一个问题，就是当 Redis 的主从服务器出现故障宕机时，需要手动进行恢复。
@@ -10031,10 +10015,6 @@ TIP
 为了解决这个问题，Redis 增加了哨兵模式（**Redis Sentinel**），因为哨兵模式做到了可以监控主从服务器，并且提供**主从节点故障转移的功能。**
 
 ![img](Basic_knowledge_of_computer.assets/26f88373d8454682b9e0c1d4fd1611b4.png)
-
-TIP
-
-想更详细了解 Redis 哨兵的工作原理，可以详细看这篇：[哨兵是怎么实现的？(opens new window)](https://xiaolincoding.com/redis/cluster/sentinel.html)
 
 > 切片集群模式
 
@@ -10065,7 +10045,7 @@ redis-cli -h 192.168.1.11 –p 6379 cluster addslots 2,3
 
 需要注意的是，在手动分配哈希槽时，需要把 16384 个槽都分配完，否则 Redis 集群无法正常工作。
 
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#集群脑裂导致数据丢失怎么办)集群脑裂导致数据丢失怎么办？
+#### 集群脑裂导致数据丢失怎么办？
 
 > 什么是脑裂？
 
@@ -10106,9 +10086,9 @@ redis-cli -h 192.168.1.11 –p 6379 cluster addslots 2,3
 
 这样一来，主从切换完成后，也只有新主库能接收请求，不会发生脑裂，也就不会发生数据丢失的问题了。
 
-## [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-过期删除与内存淘汰)Redis 过期删除与内存淘汰
+### Redis 过期删除与内存淘汰
 
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-使用的过期删除策略是什么)Redis 使用的过期删除策略是什么？
+#### Redis 使用的过期删除策略是什么？
 
 Redis 是可以对 key 设置过期时间的，因此需要有相应的机制将已过期的键值对删除，而做这个工作的就是过期键值删除策略。
 
@@ -10163,11 +10143,7 @@ Redis 的定期删除的流程：
 
 可以看到，惰性删除策略和定期删除策略都有各自的优点，所以 **Redis 选择「惰性删除+定期删除」这两种策略配和使用**，以求在合理使用 CPU 时间和避免内存浪费之间取得平衡。
 
-TIP
-
-Redis 的过期删除的内容就暂时提这些，想更详细了解的，可以详细看这篇：[Redis 过期删除策略和内存淘汰策略有什么区别？(opens new window)](https://xiaolincoding.com/redis/module/strategy.html)
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-持久化时-对过期键会如何处理的)Redis 持久化时，对过期键会如何处理的？
+#### Redis 持久化时，对过期键会如何处理的？
 
 Redis 持久化文件有两种格式：RDB（Redis Database）和 AOF（Append Only File），下面我们分别来看过期键在这两种格式中的呈现状态。
 
@@ -10187,17 +10163,17 @@ AOF 文件分为两个阶段，AOF 文件写入阶段和 AOF 重写阶段。
 - **AOF 文件写入阶段**：当 Redis 以 AOF 模式持久化时，**如果数据库某个过期键还没被删除，那么 AOF 文件会保留此过期键，当此过期键被删除后，Redis 会向 AOF 文件追加一条 DEL 命令来显式地删除该键值**。
 - **AOF 重写阶段**：执行 AOF 重写时，会对 Redis 中的键值对进行检查，**已过期的键不会被保存到重写后的 AOF 文件中**，因此不会对 AOF 重写造成任何影响。
 
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-主从模式中-对过期键会如何处理)Redis 主从模式中，对过期键会如何处理？
+#### Redis 主从模式中，对过期键会如何处理？
 
 当 Redis 运行在主从模式下时，**从库不会进行过期扫描，从库对过期的处理是被动的**。也就是即使从库中的 key 过期了，如果有客户端访问从库时，依然可以得到 key 对应的值，像未过期的键值对一样返回。
 
 从库的过期键处理依靠主服务器控制，**主库在 key 到期时，会在 AOF 文件里增加一条 del 指令，同步到所有的从库**，从库通过执行这条 del 指令来删除过期的 key。
 
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-内存满了-会发生什么)Redis 内存满了，会发生什么？
+#### Redis 内存满了，会发生什么？
 
 在 Redis 的运行内存达到了某个阀值，就会触发**内存淘汰机制**，这个阀值就是我们设置的最大运行内存，此值在 Redis 的配置文件中可以找到，配置项为 maxmemory。
 
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-内存淘汰策略有哪些)Redis 内存淘汰策略有哪些？
+#### Redis 内存淘汰策略有哪些？
 
 Redis 内存淘汰策略共有八种，这八种策略大体分为「不进行数据淘汰」和「进行数据淘汰」两类策略。
 
@@ -10220,69 +10196,9 @@ Redis 内存淘汰策略共有八种，这八种策略大体分为「不进行�
 - **allkeys-lru**：淘汰整个键值中最久未使用的键值；
 - **allkeys-lfu**（Redis 4.0 后新增的内存淘汰策略）：淘汰整个键值中最少使用的键值。
 
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#lru-算法和-lfu-算法有什么区别)LRU 算法和 LFU 算法有什么区别？
+### Redis 缓存设计
 
-> 什么是 LRU 算法？
-
-**LRU** 全称是 Least Recently Used 翻译为**最近最少使用**，会选择淘汰最近最少使用的数据。
-
-传统 LRU 算法的实现是基于「链表」结构，链表中的元素按照操作顺序从前往后排列，最新操作的键会被移动到表头，当需要内存淘汰时，只需要删除链表尾部的元素即可，因为链表尾部的元素就代表最久未被使用的元素。
-
-Redis 并没有使用这样的方式实现 LRU 算法，因为传统的 LRU 算法存在两个问题：
-
-- 需要用链表管理所有的缓存数据，这会带来额外的空间开销；
-- 当有数据被访问时，需要在链表上把该数据移动到头端，如果有大量数据被访问，就会带来很多链表移动操作，会很耗时，进而会降低 Redis 缓存性能。
-
-> Redis 是如何实现 LRU 算法的？
-
-Redis 实现的是一种**近似 LRU 算法**，目的是为了更好的节约内存，它的**实现方式是在 Redis 的对象结构体中添加一个额外的字段，用于记录此数据的最后一次访问时间**。
-
-当 Redis 进行内存淘汰时，会使用**随机采样的方式来淘汰数据**，它是随机取 5 个值（此值可配置），然后**淘汰最久没有使用的那个**。
-
-Redis 实现的 LRU 算法的优点：
-
-- 不用为所有的数据维护一个大链表，节省了空间占用；
-- 不用在每次数据访问时都移动链表项，提升了缓存的性能；
-
-但是 LRU 算法有一个问题，**无法解决缓存污染问题**，比如应用一次读取了大量的数据，而这些数据只会被读取这一次，那么这些数据会留存在 Redis 缓存中很长一段时间，造成缓存污染。
-
-因此，在 Redis 4.0 之后引入了 LFU 算法来解决这个问题。
-
-> 什么是 LFU 算法？
-
-LFU 全称是 Least Frequently Used 翻译为**最近最不常用的**，LFU 算法是根据数据访问次数来淘汰数据的，它的核心思想是“如果数据过去被访问多次，那么将来被访问的频率也更高”。
-
-所以， LFU 算法会记录每个数据的访问次数。当一个数据被再次访问时，就会增加该数据的访问次数。这样就解决了偶尔被访问一次之后，数据留存在缓存中很长一段时间的问题，相比于 LRU 算法也更合理一些。
-
-> Redis 是如何实现 LFU 算法的？
-
-LFU 算法相比于 LRU 算法的实现，多记录了「数据的访问频次」的信息。Redis 对象的结构如下：
-
-```c
-typedef struct redisObject {
-    ...
-      
-    // 24 bits，用于记录对象的访问信息
-    unsigned lru:24;  
-    ...
-} robj;
-```
-
-Redis 对象头中的 lru 字段，在 LRU 算法下和 LFU 算法下使用方式并不相同。
-
-**在 LRU 算法中**，Redis 对象头的 24 bits 的 lru 字段是用来记录 key 的访问时间戳，因此在 LRU 模式下，Redis可以根据对象头中的 lru 字段记录的值，来比较最后一次 key 的访问时间长，从而淘汰最久未被使用的 key。
-
-**在 LFU 算法中**，Redis对象头的 24 bits 的 lru 字段被分成两段来存储，高 16bit 存储 ldt(Last Decrement Time)，用来记录 key 的访问时间戳；低 8bit 存储 logc(Logistic Counter)，用来记录 key 的访问频次。
-
-![img](Basic_knowledge_of_computer.assets/lru字段.png)
-
-TIP
-
-Redis 的内存淘汰的内容就暂时提这些，想更详细了解的，可以详细看这篇：[Redis 过期删除策略和内存淘汰策略有什么区别？(opens new window)](https://xiaolincoding.com/redis/module/strategy.html)
-
-## [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-缓存设计)Redis 缓存设计
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#如何避免缓存雪崩、缓存击穿、缓存穿透)如何避免缓存雪崩、缓存击穿、缓存穿透？
+#### 如何避免缓存雪崩、缓存击穿、缓存穿透？
 
 > 如何避免缓存雪崩？
 
@@ -10329,11 +10245,7 @@ Redis 的内存淘汰的内容就暂时提这些，想更详细了解的，可�
 - **设置空值或者默认值**：当我们线上业务发现缓存穿透的现象时，可以针对查询的数据，在缓存中设置一个空值或者默认值，这样后续请求就可以从缓存中读取到空值或者默认值，返回给应用，而不会继续查询数据库。
 - **使用布隆过滤器快速判断数据是否存在，避免通过查询数据库来判断数据是否存在**：我们可以在写入数据库数据时，使用布隆过滤器做个标记，然后在用户请求到来时，业务线程确认缓存失效后，可以通过查询布隆过滤器快速判断数据是否存在，如果不存在，就不用通过查询数据库来判断数据是否存在，即使发生了缓存穿透，大量请求只会查询 Redis 和布隆过滤器，而不会查询数据库，保证了数据库能正常运行，Redis 自身也是支持布隆过滤器的。
 
-TIP
-
-推荐阅读：[什么是缓存雪崩、击穿、穿透？(opens new window)](https://xiaolincoding.com/redis/cluster/cache_problem.html)
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#如何设计一个缓存策略-可以动态缓存热点数据呢)如何设计一个缓存策略，可以动态缓存热点数据呢？
+#### 如何设计一个缓存策略，可以动态缓存热点数据呢？
 
 由于数据存储受限，系统并不是将所有数据都需要存放到缓存中的，而**只是将其中一部分热点数据缓存起来**，所以我们要设计一个热点数据动态缓存的策略。
 
@@ -10347,7 +10259,7 @@ TIP
 
 在 Redis 中可以用 zadd 方法和 zrange 方法来完成排序队列和获取 200 个商品的操作。
 
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#说说常见的缓存更新策略)说说常见的缓存更新策略？
+#### 说说常见的缓存更新策略？
 
 常见的缓存更新策略共有3种：
 
@@ -10429,371 +10341,6 @@ Write Back 是计算机体系结构中的设计，比如 CPU 的缓存、操作�
 **Write Back 策略特别适合写多的场景**，因为发生写操作的时候， 只需要更新缓存，就立马返回了。比如，写文件的时候，实际上是写入到文件系统的缓存就返回了，并不会写磁盘。
 
 **但是带来的问题是，数据不是强一致性的，而且会有数据丢失的风险**，因为缓存一般使用内存，而内存是非持久化的，所以一旦缓存机器掉电，就会造成原本缓存中的脏数据丢失。所以你会发现系统在掉电之后，之前写入的文件会有部分丢失，就是因为 Page Cache 还没有来得及刷盘造成的。
-
-这里贴一张 CPU 缓存与内存使用 Write Back 策略的流程图：
-
-![img](Basic_knowledge_of_computer.assets/writeback.png)
-
-有没有觉得这个流程很熟悉？因为我在写 [CPU 缓存文章 (opens new window)](https://xiaolincoding.com/os/1_hardware/cpu_mesi.html#写回)的时候提到过。
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#如何保证缓存和数据库数据的一致性)如何保证缓存和数据库数据的一致性？
-
-TIP
-
-推荐阅读：[数据库和缓存如何保证一致性？(opens new window)](https://xiaolincoding.com/redis/architecture/mysql_redis_consistency.html)
-
-## [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-实战)Redis 实战
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-如何实现延迟队列)Redis 如何实现延迟队列？
-
-延迟队列是指把当前要做的事情，往后推迟一段时间再做。延迟队列的常见使用场景有以下几种：
-
-- 在淘宝、京东等购物平台上下单，超过一定时间未付款，订单会自动取消；
-- 打车的时候，在规定时间没有车主接单，平台会取消你的单并提醒你暂时没有车主接单；
-- 点外卖的时候，如果商家在10分钟还没接单，就会自动取消订单；
-
-在 Redis 可以使用有序集合（ZSet）的方式来实现延迟消息队列的，ZSet 有一个 Score 属性可以用来存储延迟执行的时间。
-
-使用 zadd score1 value1 命令就可以一直往内存中生产消息。再利用 zrangebysocre 查询符合条件的所有待处理的任务， 通过循环执行队列任务即可。
-
-![img](Basic_knowledge_of_computer.assets/延迟队列.png)
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-的大-key-如何处理)Redis 的大 key 如何处理？
-
-> 什么是 Redis 大 key？
-
-大 key 并不是指 key 的值很大，而是 key 对应的 value 很大。
-
-一般而言，下面这两种情况被称为大 key：
-
-- String 类型的值大于 10 KB；
-- Hash、List、Set、ZSet 类型的元素的个数超过 5000个；
-
-> 大 key 会造成什么问题？
-
-大 key 会带来以下四种影响：
-
-- **客户端超时阻塞**。由于 Redis 执行命令是单线程处理，然后在操作大 key 时会比较耗时，那么就会阻塞 Redis，从客户端这一视角看，就是很久很久都没有响应。
-- **引发网络阻塞**。每次获取大 key 产生的网络流量较大，如果一个 key 的大小是 1 MB，每秒访问量为 1000，那么每秒会产生 1000MB 的流量，这对于普通千兆网卡的服务器来说是灾难性的。
-- **阻塞工作线程**。如果使用 del 删除大 key 时，会阻塞工作线程，这样就没办法处理后续的命令。
-- **内存分布不均**。集群模型在 slot 分片均匀情况下，会出现数据和查询倾斜情况，部分有大 key 的 Redis 节点占用内存多，QPS 也会比较大。
-
-> 如何找到大 key ？
-
-***1、redis-cli --bigkeys 查找大key***
-
-可以通过 redis-cli --bigkeys 命令查找大 key：
-
-```shell
-redis-cli -h 127.0.0.1 -p6379 -a "password" -- bigkeys
-```
-
-使用的时候注意事项：
-
-- 最好选择在从节点上执行该命令。因为主节点上执行时，会阻塞主节点；
-- 如果没有从节点，那么可以选择在 Redis 实例业务压力的低峰阶段进行扫描查询，以免影响到实例的正常运行；或者可以使用 -i 参数控制扫描间隔，避免长时间扫描降低 Redis 实例的性能。
-
-该方式的不足之处：
-
-- 这个方法只能返回每种类型中最大的那个 bigkey，无法得到大小排在前 N 位的 bigkey；
-- 对于集合类型来说，这个方法只统计集合元素个数的多少，而不是实际占用的内存量。但是，一个集合中的元素个数多，并不一定占用的内存就多。因为，有可能每个元素占用的内存很小，这样的话，即使元素个数有很多，总内存开销也不大；
-
-***2、使用 SCAN 命令查找大 key***
-
-使用 SCAN 命令对数据库扫描，然后用 TYPE 命令获取返回的每一个 key 的类型。
-
-对于 String 类型，可以直接使用 STRLEN 命令获取字符串的长度，也就是占用的内存空间字节数。
-
-对于集合类型来说，有两种方法可以获得它占用的内存大小：
-
-- 如果能够预先从业务层知道集合元素的平均大小，那么，可以使用下面的命令获取集合元素的个数，然后乘以集合元素的平均大小，这样就能获得集合占用的内存大小了。List 类型：`LLEN` 命令；Hash 类型：`HLEN` 命令；Set 类型：`SCARD` 命令；Sorted Set 类型：`ZCARD` 命令；
-- 如果不能提前知道写入集合的元素大小，可以使用 `MEMORY USAGE` 命令（需要 Redis 4.0 及以上版本），查询一个键值对占用的内存空间。
-
-***3、使用 RdbTools 工具查找大 key***
-
-使用 RdbTools 第三方开源工具，可以用来解析 Redis 快照（RDB）文件，找到其中的大 key。
-
-比如，下面这条命令，将大于 10 kb 的  key  输出到一个表格文件。
-
-```shell
-rdb dump.rdb -c memory --bytes 10240 -f redis.csv
-```
-
-> 如何删除大 key？
-
-删除操作的本质是要释放键值对占用的内存空间，不要小瞧内存的释放过程。
-
-释放内存只是第一步，为了更加高效地管理内存空间，在应用程序释放内存时，操作系统需要把释放掉的内存块插入一个空闲内存块的链表，以便后续进行管理和再分配。这个过程本身需要一定时间，而且会阻塞当前释放内存的应用程序。
-
-所以，如果一下子释放了大量内存，空闲内存块链表操作时间就会增加，相应地就会造成 Redis 主线程的阻塞，如果主线程发生了阻塞，其他所有请求可能都会超时，超时越来越多，会造成 Redis 连接耗尽，产生各种异常。
-
-因此，删除大 key 这一个动作，我们要小心。具体要怎么做呢？这里给出两种方法：
-
-- 分批次删除
-- 异步删除（Redis 4.0版本以上）
-
-***1、分批次删除***
-
-对于**删除大 Hash**，使用 `hscan` 命令，每次获取 100 个字段，再用 `hdel` 命令，每次删除 1 个字段。
-
-Python代码：
-
-```python
-def del_large_hash():
-  r = redis.StrictRedis(host='redis-host1', port=6379)
-    large_hash_key ="xxx" #要删除的大hash键名
-    cursor = '0'
-    while cursor != 0:
-        # 使用 hscan 命令，每次获取 100 个字段
-        cursor, data = r.hscan(large_hash_key, cursor=cursor, count=100)
-        for item in data.items():
-                # 再用 hdel 命令，每次删除1个字段
-                r.hdel(large_hash_key, item[0])
-```
-
-对于**删除大 List**，通过 `ltrim` 命令，每次删除少量元素。
-
-Python代码：
-
-```python
-def del_large_list():
-  r = redis.StrictRedis(host='redis-host1', port=6379)
-  large_list_key = 'xxx'  #要删除的大list的键名
-  while r.llen(large_list_key)>0:
-      #每次只删除最右100个元素
-      r.ltrim(large_list_key, 0, -101) 
-```
-
-对于**删除大 Set**，使用 `sscan` 命令，每次扫描集合中 100 个元素，再用 `srem` 命令每次删除一个键。
-
-Python代码：
-
-```python
-def del_large_set():
-  r = redis.StrictRedis(host='redis-host1', port=6379)
-  large_set_key = 'xxx'   # 要删除的大set的键名
-  cursor = '0'
-  while cursor != 0:
-    # 使用 sscan 命令，每次扫描集合中 100 个元素
-    cursor, data = r.sscan(large_set_key, cursor=cursor, count=100)
-    for item in data:
-      # 再用 srem 命令每次删除一个键
-      r.srem(large_size_key, item)
-```
-
-对于**删除大 ZSet**，使用 `zremrangebyrank` 命令，每次删除 top 100个元素。
-
-Python代码：
-
-```python
-def del_large_sortedset():
-  r = redis.StrictRedis(host='large_sortedset_key', port=6379)
-  large_sortedset_key='xxx'
-  while r.zcard(large_sortedset_key)>0:
-    # 使用 zremrangebyrank 命令，每次删除 top 100个元素
-    r.zremrangebyrank(large_sortedset_key,0,99) 
-```
-
-***2、异步删除***
-
-从 Redis 4.0 版本开始，可以采用**异步删除**法，**用 unlink 命令代替 del 来删除**。
-
-这样 Redis 会将这个 key 放入到一个异步线程中进行删除，这样不会阻塞主线程。
-
-除了主动调用 unlink 命令实现异步删除之外，我们还可以通过配置参数，达到某些条件的时候自动进行异步删除。
-
-主要有 4 种场景，默认都是关闭的：
-
-```text
-lazyfree-lazy-eviction no
-lazyfree-lazy-expire no
-lazyfree-lazy-server-del
-noslave-lazy-flush no
-```
-
-它们代表的含义如下：
-
-- lazyfree-lazy-eviction：表示当 Redis 运行内存超过 maxmeory 时，是否开启 lazy free 机制删除；
-- lazyfree-lazy-expire：表示设置了过期时间的键值，当过期之后是否开启 lazy free 机制删除；
-- lazyfree-lazy-server-del：有些指令在处理已存在的键时，会带有一个隐式的 del 键的操作，比如 rename 命令，当目标键已存在，Redis 会先删除目标键，如果这些目标键是一个 big key，就会造成阻塞删除的问题，此配置表示在这种场景中是否开启 lazy free 机制删除；
-- slave-lazy-flush：针对 slave (从节点) 进行全量数据同步，slave 在加载 master 的 RDB 文件前，会运行 flushall 来清理自己的数据，它表示此时是否开启 lazy free 机制删除。
-
-建议开启其中的 lazyfree-lazy-eviction、lazyfree-lazy-expire、lazyfree-lazy-server-del 等配置，这样就可以有效的提高主线程的执行效率。
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-管道有什么用)Redis 管道有什么用？
-
-管道技术（Pipeline）是客户端提供的一种批处理技术，用于一次处理多个 Redis 命令，从而提高整个交互的性能。
-
-普通命令模式，如下图所示：
-
-![img](Basic_knowledge_of_computer.assets/普通命令模式.jpg)
-
-管道模式，如下图所示：
-
-![img](Basic_knowledge_of_computer.assets/管道模式.jpg)
-
-使用**管道技术可以解决多个命令执行时的网络等待**，它是把多个命令整合到一起发送给服务器端处理之后统一返回给客户端，这样就免去了每条命令执行后都要等待的情况，从而有效地提高了程序的执行效率。
-
-但使用管道技术也要注意避免发送的命令过大，或管道内的数据太多而导致的网络阻塞。
-
-要注意的是，管道技术本质上是客户端提供的功能，而非 Redis 服务器端的功能。
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#redis-事务支持回滚吗)Redis 事务支持回滚吗？
-
-MySQL 在执行事务时，会提供回滚机制，当事务执行发生错误时，事务中的所有操作都会撤销，已经修改的数据也会被恢复到事务执行前的状态。
-
-**Redis 中并没有提供回滚机制**，虽然 Redis 提供了 DISCARD 命令，但是这个命令只能用来主动放弃事务执行，把暂存的命令队列清空，起不到回滚的效果。
-
-下面是 DISCARD 命令用法：
-
-```c
-#读取 count 的值4
-127.0.0.1:6379> GET count
-"1"
-#开启事务
-127.0.0.1:6379> MULTI 
-OK
-#发送事务的第一个操作，对count减1
-127.0.0.1:6379> DECR count
-QUEUED
-#执行DISCARD命令，主动放弃事务
-127.0.0.1:6379> DISCARD
-OK
-#再次读取a:stock的值，值没有被修改
-127.0.0.1:6379> GET count
-"1"
-```
-
-事务执行过程中，如果命令入队时没报错，而事务提交后，实际执行时报错了，正确的命令依然可以正常执行，所以这可以看出 **Redis 并不一定保证原子性**（原子性：事务中的命令要不全部成功，要不全部失败）。
-
-比如下面这个例子：
-
-```c
-#获取name原本的值
-127.0.0.1:6379> GET name
-"xiaolin"
-#开启事务
-127.0.0.1:6379> MULTI
-OK
-#设置新值
-127.0.0.1:6379(TX)> SET name xialincoding
-QUEUED
-#注意，这条命令是错误的
-# expire 过期时间正确来说是数字，并不是‘10s’字符串，但是还是入队成功了
-127.0.0.1:6379(TX)> EXPIRE name 10s
-QUEUED
-#提交事务，执行报错
-#可以看到 set 执行成功，而 expire 执行错误。
-127.0.0.1:6379(TX)> EXEC
-1) OK
-2) (error) ERR value is not an integer or out of range
-#可以看到，name 还是被设置为新值了
-127.0.0.1:6379> GET name
-"xialincoding"
-```
-
-> 为什么Redis 不支持事务回滚？
-
-Redis [官方文档 (opens new window)](https://redis.io/topics/transactions)的解释如下：
-
-![img](Basic_knowledge_of_computer.assets/redis官方解释回滚.png)
-
-大概的意思是，作者不支持事务回滚的原因有以下两个：
-
-- 他认为 Redis 事务的执行时，错误通常都是编程错误造成的，这种错误通常只会出现在开发环境中，而很少会在实际的生产环境中出现，所以他认为没有必要为 Redis 开发事务回滚功能；
-- 不支持事务回滚是因为这种复杂的功能和 Redis 追求的简单高效的设计主旨不符合。
-
-这里不支持事务回滚，指的是不支持事务运行时错误的事务回滚。
-
-### [#](https://www.xiaolincoding.com/redis/base/redis_interview.html#如何用-redis-实现分布式锁的)如何用 Redis 实现分布式锁的？
-
-分布式锁是用于分布式环境下并发控制的一种机制，用于控制某个资源在同一时刻只能被一个应用所使用。如下图所示：
-
-![img](Basic_knowledge_of_computer.assets/分布式锁.jpg)
-
-Redis 本身可以被多个客户端共享访问，正好就是一个共享存储系统，可以用来保存分布式锁，而且 Redis 的读写性能高，可以应对高并发的锁操作场景。
-
-Redis 的 SET 命令有个 NX 参数可以实现「key不存在才插入」，所以可以用它来实现分布式锁：
-
-- 如果 key 不存在，则显示插入成功，可以用来表示加锁成功；
-- 如果 key 存在，则会显示插入失败，可以用来表示加锁失败。
-
-基于 Redis 节点实现分布式锁时，对于加锁操作，我们需要满足三个条件。
-
-- 加锁包括了读取锁变量、检查锁变量值和设置锁变量值三个操作，但需要以原子操作的方式完成，所以，我们使用 SET 命令带上 NX 选项来实现加锁；
-- 锁变量需要设置过期时间，以免客户端拿到锁后发生异常，导致锁一直无法释放，所以，我们在 SET 命令执行时加上 EX/PX 选项，设置其过期时间；
-- 锁变量的值需要能区分来自不同客户端的加锁操作，以免在释放锁时，出现误释放操作，所以，我们使用 SET 命令设置锁变量值时，每个客户端设置的值是一个唯一值，用于标识客户端；
-
-满足这三个条件的分布式命令如下：
-
-```c
-SET lock_key unique_value NX PX 10000 
-```
-
-- lock_key 就是 key 键；
-- unique_value 是客户端生成的唯一的标识，区分来自不同客户端的锁操作；
-- NX 代表只在 lock_key 不存在时，才对 lock_key 进行设置操作；
-- PX 10000 表示设置 lock_key 的过期时间为 10s，这是为了避免客户端发生异常而无法释放锁。
-
-而解锁的过程就是将 lock_key 键删除（del lock_key），但不能乱删，要保证执行操作的客户端就是加锁的客户端。所以，解锁的时候，我们要先判断锁的 unique_value 是否为加锁客户端，是的话，才将 lock_key 键删除。
-
-可以看到，解锁是有两个操作，这时就需要 Lua 脚本来保证解锁的原子性，因为 Redis 在执行 Lua 脚本时，可以以原子性的方式执行，保证了锁释放操作的原子性。
-
-```c
-// 释放锁时，先比较 unique_value 是否相等，避免锁的误释放
-if redis.call("get",KEYS[1]) == ARGV[1] then
-    return redis.call("del",KEYS[1])
-else
-    return 0
-end
-```
-
-这样一来，就通过使用 SET 命令和 Lua 脚本在 Redis 单节点上完成了分布式锁的加锁和解锁。
-
-> 基于 Redis 实现分布式锁有什么优缺点？
-
-基于 Redis 实现分布式锁的**优点**：
-
-1. 性能高效（这是选择缓存实现分布式锁最核心的出发点）。
-2. 实现方便。很多研发工程师选择使用 Redis 来实现分布式锁，很大成分上是因为 Redis 提供了 setnx 方法，实现分布式锁很方便。
-3. 避免单点故障（因为 Redis 是跨集群部署的，自然就避免了单点故障）。
-
-基于 Redis 实现分布式锁的**缺点**：
-
-- 超时时间不好设置
-
-  。如果锁的超时时间设置过长，会影响性能，如果设置的超时时间过短会保护不到共享资源。比如在有些场景中，一个线程 A 获取到了锁之后，由于业务代码执行时间可能比较长，导致超过了锁的超时时间，自动失效，注意 A 线程没执行完，后续线程 B 又意外的持有了锁，意味着可以操作共享资源，那么两个线程之间的共享资源就没办法进行保护了。
-
-  - **那么如何合理设置超时时间呢？** 我们可以基于续约的方式设置超时时间：先给锁设置一个超时时间，然后启动一个守护线程，让守护线程在一段时间后，重新设置这个锁的超时时间。实现方式就是：写一个守护线程，然后去判断锁的情况，当锁快失效的时候，再次进行续约加锁，当主线程执行完成后，销毁续约锁即可，不过这种方式实现起来相对复杂。
-
-- **Redis 主从复制模式中的数据是异步复制的，这样导致分布式锁的不可靠性**。如果在 Redis 主节点获取到锁后，在没有同步到其他节点时，Redis 主节点宕机了，此时新的 Redis 主节点依然可以获取锁，所以多个应用服务就可以同时获取到锁。
-
-> Redis 如何解决集群情况下分布式锁的可靠性？
-
-为了保证集群环境下分布式锁的可靠性，Redis 官方已经设计了一个分布式锁算法 Redlock（红锁）。
-
-它是基于**多个 Redis 节点**的分布式锁，即使有节点发生了故障，锁变量仍然是存在的，客户端还是可以完成锁操作。官方推荐是至少部署 5 个 Redis 节点，而且都是主节点，它们之间没有任何关系，都是一个个孤立的节点。
-
-Redlock 算法的基本思路，**是让客户端和多个独立的 Redis 节点依次请求申请加锁，如果客户端能够和半数以上的节点成功地完成加锁操作，那么我们就认为，客户端成功地获得分布式锁，否则加锁失败**。
-
-这样一来，即使有某个 Redis 节点发生故障，因为锁的数据在其他节点上也有保存，所以客户端仍然可以正常地进行锁操作，锁的数据也不会丢失。
-
-Redlock 算法加锁三个过程：
-
-- 第一步是，客户端获取当前时间（t1）。
-- 第二步是，客户端按顺序依次向 N 个 Redis 节点执行加锁操作：
-  - 加锁操作使用 SET 命令，带上 NX，EX/PX 选项，以及带上客户端的唯一标识。
-  - 如果某个 Redis 节点发生故障了，为了保证在这种情况下，Redlock 算法能够继续运行，我们需要给「加锁操作」设置一个超时时间（不是对「锁」设置超时时间，而是对「加锁操作」设置超时时间），加锁操作的超时时间需要远远地小于锁的过期时间，一般也就是设置为几十毫秒。
-- 第三步是，一旦客户端从超过半数（大于等于 N/2+1）的 Redis 节点上成功获取到了锁，就再次获取当前时间（t2），然后计算计算整个加锁过程的总耗时（t2-t1）。如果 t2-t1 < 锁的过期时间，此时，认为客户端加锁成功，否则认为加锁失败。
-
-可以看到，加锁成功要同时满足两个条件（*简述：如果有超过半数的 Redis 节点成功的获取到了锁，并且总耗时没有超过锁的有效时间，那么就是加锁成功*）：
-
-- 条件一：客户端从超过半数（大于等于 N/2+1）的 Redis 节点上成功获取到了锁；
-- 条件二：客户端从大多数节点获取锁的总耗时（t2-t1）小于锁设置的过期时间。
-
-加锁成功后，客户端需要重新计算这把锁的有效时间，计算的结果是「锁最初设置的过期时间」减去「客户端从大多数节点获取锁的总耗时（t2-t1）」。如果计算的结果已经来不及完成共享数据的操作了，我们可以释放锁，以免出现还没完成数据操作，锁就过期了的情况。
-
-加锁失败后，客户端向**所有 Redis 节点发起释放锁的操作**，释放锁的操作和在单节点上释放锁的操作一样，只要执行释放锁的 Lua 脚本就可以了。
 
 # 其他
 

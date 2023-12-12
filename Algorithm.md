@@ -554,7 +554,7 @@ class Trie
 public:
     vector<Trie *> c;
     vector<int> size;
-    Trie() : size(2) {}
+    Trie() : csize(2) {}
     void insert(int &x)
     {
         Trie *node = this;
